@@ -1,28 +1,51 @@
 {
-  "name": "tuyens-claude-code",
-  "description": "Claude Code plugin for Java Spring and React development",
+  "name": "tuyens-mobile-skills",
+  "description": "Marketplace for Tuyen's mobile client agent skills: flutter and unity.",
   "owner": {
     "name": "Tuyen",
     "contact": "github.com/tuyenivt"
   },
   "plugins": [
     {
-      "name": "tuyens-claude-code",
-      "source": "./",
-      "description": "59 skills and 11 agents for Java Spring and React development",
-      "version": "3.8.0",
+      "name": "flutter",
+      "source": "./plugins/flutter",
+      "description": "Skills and agents for Flutter/Dart client development.",
+      "version": "1.0.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenivt"
       },
       "tags": [
-        "java",
-        "spring-boot",
-        "react",
-        "typescript",
-        "api",
-        "development",
-        "review"
+        "flutter",
+        "dart",
+        "mobile",
+        "android",
+        "ios",
+        "riverpod",
+        "go-router",
+        "dio",
+        "drift"
+      ]
+    },
+    {
+      "name": "unity",
+      "source": "./plugins/unity",
+      "description": "Skills and agents for Unity 2D game development.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Tuyen",
+        "url": "https://github.com/tuyenivt"
+      },
+      "tags": [
+        "unity",
+        "csharp",
+        "game-development",
+        "2d",
+        "mobile",
+        "urp",
+        "ui-toolkit",
+        "addressables",
+        "puzzle-games"
       ]
     }
   ]

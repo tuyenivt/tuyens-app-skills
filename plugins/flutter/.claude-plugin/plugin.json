@@ -1,0 +1,9 @@
+{
+  "name": "flutter",
+  "version": "1.0.0",
+  "description": "Claude Code plugin for Flutter/Dart client development. Riverpod, go_router, Dio, Drift, freezed. Mobile primary, desktop secondary, web tertiary. Works with core plugin.",
+  "author": {
+    "name": "Tuyen"
+  },
+  "license": "MIT"
+}

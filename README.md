@@ -1,327 +1,86 @@
-# Tuyen's Claude Code
+# Tuyen's Mobile Skills
 
-> **This repository is archived.** It has been replaced by [tuyens-agent-skills](https://github.com/tuyenivt/tuyens-agent-skills).
+Single marketplace repository for Claude Code mobile client plugins: `flutter` and `unity`. Each is fully standalone - install exactly the one your project needs.
 
-## Migration
+## Recommended: Project-Scoped Installation
 
-Install the new plugin for Java / Spring Boot projects:
+**Install at the project (repo) level, not at the user level.**
 
-```bash
-claude plugin install core@tuyens-agent-skills --scope project
-claude plugin install java@tuyens-agent-skills --scope project
-```
+Each project should only load the skills it actually needs. Installing every plugin globally at user scope bloats each Claude Code session with skills for stacks you're not using, wasting context window space and making the skill picker noisy.
 
-## Overview
+The right pattern: **one marketplace add per machine, then per-project plugin installs.**
 
-Claude Code plugin for Java 21+ / Spring Boot 3.5+ and React development. 11 agents, 59 skills (19 workflow + 40 atomic).
-
-## Installation
+### Step 1 - Add the marketplace once (user scope, done once per machine)
 
 ```bash
-# Add marketplace
-/plugin marketplace add tuyenivt/tuyens-claude-code
-
-# Install
-/plugin install tuyens-claude-code
+claude plugin marketplace add tuyenivt/tuyens-mobile-skills
 ```
 
-## Optional: Share Skills Between Claude Code and Codex
+### Step 2 - Install the relevant plugin inside each project (project scope)
 
-Claude Code and Codex use the same `agentskills.io` format. You can create a symbolic link so Codex reuses the skills managed by Claude Code.
-This is useful because Codex does not automatically update skills, while Claude Code does.
+Run these commands from your project root. Claude Code stores the selection in the project's local settings, so only those skills load when you open that project.
+
+**Flutter / Dart project:**
 
 ```bash
-# Unix (Linux/macOS)
-ln -s "$HOME/.claude/plugins/marketplaces/tuyens-claude-code/skills" "$HOME/.codex/skills/tuyens-claude-code-skills"
-
-# Windows
-mklink /J "%USERPROFILE%\.codex\skills\tuyens-claude-code-skills" "%USERPROFILE%\.claude\plugins\marketplaces\tuyens-claude-code\skills"
+claude plugin install flutter@tuyens-mobile-skills --scope project
 ```
 
-## Requirements
+**Unity 2D game project:**
 
-- Claude Code >= 2.0.0
-- Backend: Java 21+, Spring Boot 3.5+ (Spring Boot 4 best-effort), JPA, Gradle
-- Frontend: React, TypeScript
-
-## Key Features
-
-- **Virtual Threads**: All skills enforce Virtual Thread compatibility (no `synchronized`)
-- **Java 21+ Patterns**: Records for DTOs, pattern matching, sealed classes
-- **Spring Boot 3.5+**: Jakarta EE 10 (EE 11 for Spring Boot 4), optimized connection pools (10-40)
-
-## Workflow Skills
-
-Workflow skills (`task-*`) orchestrate multiple atomic skills into task-oriented workflows. They are invoked as slash commands.
-
-### Framework-Specific
-
-| Skill                  | Purpose                     | Agent              |
-| ---------------------- | --------------------------- | ------------------ |
-| `task-spring-new`      | Create Spring Boot endpoint | `spring-architect` |
-| `task-react-component` | Create React component      | `react-architect`  |
-| `task-react-page`      | Create React page           | `react-architect`  |
-
-### Framework-Aware (Auto-detect)
-
-| Skill                       | Purpose                                                                    | Agent                  |
-| --------------------------- | -------------------------------------------------------------------------- | ---------------------- |
-| `task-api-design`           | Design or review REST API contracts before implementation                  | `spring-architect`     |
-| `task-architecture-design`  | Staff-level architecture design proposal                                   | `spring-architect`     |
-| `task-code-review`          | Code review (any framework)                                                | `tech-lead`            |
-| `task-code-review-advanced` | Staff-level review with risk assessment (scope: core/+perf/+security/full) | `tech-lead`            |
-| `task-code-secure`          | Security review                                                            | `security-engineer`    |
-| `task-code-test`            | Test strategy                                                              | `test-engineer`        |
-| `task-code-refactor`        | Refactoring plan                                                           | `refactoring-expert`   |
-| `task-debug`                | Developer debugging workflow from error to minimal fix                     | `spring-architect`     |
-| `task-perf-review`          | Performance review                                                         | `performance-engineer` |
-| `task-docs-generate`        | Generate documentation                                                     | `technical-writer`     |
-| `task-implement-feature`    | End-to-end Spring Boot feature implementation workflow                     | `spring-architect`     |
-| `task-root-cause`           | Incident root cause analysis                                               | `reliability-engineer` |
-| `task-postmortem`           | Post-incident postmortem and prevention                                    | `reliability-engineer` |
-| `task-pr-prepare`           | Prepare PR commits, description, and pre-submit validation                 | `tech-lead`            |
-| `task-release-plan`         | Production release planning with rollout safety                            | `reliability-engineer` |
-| `task-risk-analysis`        | Proactive engineering risk assessment for proposed changes                 | `reliability-engineer` |
-
-## Usage Examples
-
-**Create Spring Boot endpoint:**
-
-```
-/task-spring-new
-Resource: Order
-Package: com.example.order
-Operations: CRUD with pagination
+```bash
+claude plugin install unity@tuyens-mobile-skills --scope project
 ```
 
-**Create React component:**
+> Each plugin is self-contained and has no dependencies. Install exactly one per project - `flutter` and `unity` are never installed together.
+
+## How Skills Work
+
+Each plugin contains two types of skills:
+
+- **Workflow skills** (`task-*`, `user-invocable: true`): End-to-end task flows invoked as slash commands (e.g., `/task-flutter-review`). These are the skills you interact with directly.
+- **Atomic skills** (`user-invocable: false`): Focused, single-concern patterns hidden from the slash menu. They are composed automatically by workflow skills or triggered by your prompt - you never call them directly.
+
+> Use only workflow skills (`task-*`) as slash commands. Atomic skills run behind the scenes.
+
+## Which Skill Do I Use?
 
 ```
-/task-react-component
-Name: OrderList
-Props: orders, onSelect
+Flutter / Dart (plugin: flutter)
+  implement a new feature              -> /task-flutter-implement
+  staff-level code review              -> /task-flutter-review
+  performance review                   -> /task-flutter-review-perf
+  security review                      -> /task-flutter-review-security
+  test strategy / scaffolds            -> /task-flutter-test
+
+Unity 2D games (plugin: unity)
+  implement a new feature              -> /task-unity-implement
+  staff-level code review              -> /task-unity-review
+  performance review                   -> /task-unity-review-perf
+  security review                      -> /task-unity-review-security
+  test strategy / scaffolds            -> /task-unity-test
 ```
 
-**Architecture design proposal:**
+> Neither plugin reviews API contract design - a client consumes API contracts rather than designing them. The concern that does reach clients, where an installed old app version must survive a server contract change, is checked inside the umbrella review and `/task-<stack>-implement`. Accessibility is handled during `/task-<stack>-implement` and checked at baseline depth inside the umbrella review, alongside adaptivity and localization.
 
-```
-/task-architecture-design
-Feature: Order processing with payment integration
-Constraints: eventual consistency acceptable, 500 RPS steady state
-```
+**Common decision points:**
 
-**Design API contract before implementation:**
+- "Umbrella review vs. focused review" - `/task-<stack>-review` is the general review; it auto-escalates into the perf and security lenses when the change set fires their signals. Call a focused review directly when you already know which lens you need.
+- "Review vs. implement" - reviews read a change set and report findings. `/task-<stack>-implement` designs and writes the feature, including its tests and any schema migration.
+- "Which change set gets reviewed" - reviews read the **working tree** by default, so uncommitted work is the subject. Pass `--staged` to review only staged changes; with a clean tree the review falls back to the last commit.
 
-```
-/task-api-design
-Resource: Payment
-Operations: create payment intent, confirm payment, list payments
-Consumers: mobile app and internal admin panel
-Constraints: backward-compatible with existing /api/v1/orders
-```
+## Plugin Catalog
 
-**Implement a full Spring Boot feature:**
+| Plugin                     | Focus                                                                                                                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [flutter](plugins/flutter) | Flutter / Dart 3.x client apps - Riverpod, go_router, Dio, Drift. Mobile primary, desktop secondary, web tertiary                                                 |
+| [unity](plugins/unity)     | Unity 6.3 LTS / C# 2D games - casual and puzzle titles. Engine-free rules core, URP 2D, UI Toolkit, Addressables. Mobile primary, desktop secondary, WebGL tertiary |
 
-```
-/task-implement-feature
-Feature: Payment
-Package: com.example.payment
-Operations: Create, Confirm, GetById, List with pagination
-Relationships: Payment belongs to Order (ManyToOne)
-Rules: amount > 0, status transitions PENDING -> CONFIRMED/FAILED
-Visibility: internal
-```
+## Notes
 
-**Debug a developer error quickly:**
-
-```
-/task-debug
-Error: org.springframework.dao.DataIntegrityViolationException
-Context: POST /api/v1/orders returns 500
-Stack trace: [paste stack trace]
-Expected: 201 CREATED
-```
-
-**Review code (basic, auto-detects framework):**
-
-```
-/task-code-review
-[paste code or file path]
-```
-
-**Staff-level review (risk assessment, architecture guardrails, quality):**
-
-```
-/task-code-review-advanced
-[paste code or file path]
-```
-
-Scope options -- asks interactively if not specified:
-
-```
-/task-code-review-advanced +perf      # Core + performance review
-/task-code-review-advanced +security  # Core + security review
-/task-code-review-advanced full       # Core + performance + security
-```
-
-**Incident root cause analysis:**
-
-```
-/task-root-cause
-[paste stack trace, logs, or error message]
-```
-
-**Post-incident postmortem:**
-
-```
-/task-postmortem
-[paste incident summary and root cause analysis output]
-```
-
-**Production release planning:**
-
-```
-/task-release-plan
-Feature: New order payment flow with Stripe integration
-DB migration: adds payment_intent_id column to orders table
-Traffic expectation: 500 RPS steady state
-```
-
-Scope options -- asks interactively if not specified:
-
-```
-/task-release-plan +review   # Core + code review
-/task-release-plan +perf     # Core + performance review
-/task-release-plan full      # Core + review + performance
-```
-
-**Proactive risk assessment (before implementation or merge):**
-
-```
-/task-risk-analysis
-Change: Introduce async order payment flow with Stripe webhook
-DB migration: adds payment_intent_id column to orders table
-Integration: new Stripe webhook endpoint
-```
-
-**Prepare pull request before review:**
-
-```
-/task-pr-prepare
-Scope: payment module + order controller
-Context: add payment intent flow and migration
-Ticket: PROJ-1234
-```
-
-**Security review (works with any framework):**
-
-```
-/task-code-secure
-[paste code or file path]
-```
-
-## Agents
-
-| Agent                  | Focus                              |
-| ---------------------- | ---------------------------------- |
-| `spring-architect`     | Spring Boot, JPA, APIs             |
-| `spring-performance`   | Spring Boot performance and tuning |
-| `react-architect`      | React, accessibility               |
-| `react-performance`    | React rendering optimization       |
-| `security-engineer`    | OWASP, auth                        |
-| `performance-engineer` | Optimization (multi-lang)          |
-| `test-engineer`        | Testing strategy                   |
-| `refactoring-expert`   | Code cleanup                       |
-| `technical-writer`     | Documentation                      |
-| `tech-lead`            | Code review (multi-lang)           |
-| `reliability-engineer` | Incident analysis and prevention   |
-
-## Atomic Skills (Reusable Patterns)
-
-40 atomic skills organized by category provide focused, reusable patterns. These are hidden from the slash menu (`user-invocable: false`) and referenced only by workflow skills and agents.
-
-### Backend
-
-| Skill                       | Purpose                                                    |
-| --------------------------- | ---------------------------------------------------------- |
-| `async-processing`          | Async processing with Spring @Async                        |
-| `db-migration-safety`       | Safe DDL patterns for zero-downtime deployments            |
-| `gradle-build-optimization` | Gradle build optimization for Spring Boot projects         |
-| `exception-handling`        | Centralized exception handling                             |
-| `jpa-performance`           | JPA optimization and N+1 prevention                        |
-| `test-spring-integration`   | Spring test slices and Testcontainers integration patterns |
-| `transaction`               | Transaction management                                     |
-| `spring-security-patterns`  | Spring Security 6.x configuration and hardening patterns   |
-| `websocket-spring`          | WebSocket and STOMP messaging                              |
-
-### Frontend
-
-| Skill                    | Purpose                          |
-| ------------------------ | -------------------------------- |
-| `react-component-design` | Component composition and SRP    |
-| `react-memoization`      | useMemo and useCallback patterns |
-| `react-state-management` | State scope and ownership        |
-| `websocket-react`        | WebSocket hooks and STOMP client |
-
-### Architecture
-
-| Skill                       | Purpose                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `system-boundary-design`    | Formal boundary modeling for module/service decomposition                     |
-| `data-consistency-modeling` | Consistency strategy selection across data boundaries                         |
-| `tradeoff-analysis`         | Structured architectural decision and trade-off documentation                 |
-| `concurrency-model`         | Concurrency risk assessment, Virtual Thread-safe locking, context propagation |
-
-### Performance
-
-| Skill                  | Purpose                                                   |
-| ---------------------- | --------------------------------------------------------- |
-| `caching`              | Cache strategy and invalidation                           |
-| `capacity-modeling`    | Throughput estimation, scaling, and bottleneck prediction |
-| `db-indexing`          | Database indexing strategy                                |
-| `payload-optimization` | API response optimization                                 |
-
-### Ops
-
-| Skill                             | Purpose                                                      |
-| --------------------------------- | ------------------------------------------------------------ |
-| `observability`                   | Logging, metrics, tracing                                    |
-| `resiliency`                      | Timeout, retry, circuit breaker, and REST client integration |
-| `release-safety`                  | Rollout, rollback, and deployment risk patterns              |
-| `dependency-impact-analysis`      | Deployment ordering and dependency change impact             |
-| `safe-file-operations`            | Cross-platform shell and file operations                     |
-| `failure-classification`          | Classify failures by type, mechanism, and system layer       |
-| `failure-propagation-analysis`    | Trace cascading failure paths across system boundaries       |
-| `root-cause-hypothesis`           | Generate ranked hypotheses with confidence and evidence      |
-| `backward-compatibility-analysis` | API, event, and data contract compatibility assessment       |
-
-### Integration
-
-| Skill         | Purpose              |
-| ------------- | -------------------- |
-| `idempotency` | Idempotency patterns |
-
-### Governance
-
-| Skill                        | Purpose                                                                       |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `api-guidelines`             | API consistency, documentation, and REST endpoint design                      |
-| `coding-standards`           | Code style and structure                                                      |
-| `pr-risk-analysis`           | Lightweight heuristic PR risk classification                                  |
-| `blast-radius-analysis`      | Failure propagation and change impact scope                                   |
-| `architecture-guardrail`     | Layer violation and boundary erosion detection                                |
-| `complexity-review`          | Detect unnecessary complexity and provide simpler alternatives                |
-| `review-gap-analysis`        | Analyze why review processes missed a failure                                 |
-| `change-risk-classification` | Pre-implementation risk domain classification                                 |
-| `engineering-governance`     | Engineering process, governance, guardrail evolution, and incident prevention |
-
-**Benefits:**
-
-- Single source of truth for patterns
-- Reduced duplicated content through skill composition
-- Easy maintenance (update once, affects all)
-- Clear separation: workflow skills orchestrate multi-step tasks, atomic skills provide implementation patterns
+- Each plugin is self-contained - no shared plugin, no cross-plugin references.
+- Each plugin folder has its own README with stack-specific usage and examples.
 
 ## License
 
-MIT
+This project is proprietary. All rights reserved.
