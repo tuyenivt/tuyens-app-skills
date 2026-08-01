@@ -9,7 +9,7 @@ user-invocable: false
 
 # Flutter Riverpod Patterns
 
-> **This skill is Riverpod-only.** If the detected project uses Bloc, Provider, or GetX, open the response with `Detected <X>; Riverpod-specific guidance does not apply` and fall back to the state-management-agnostic subset: keep UI state out of widgets, model async work as explicit loading/error/data states, do side effects in event handlers rather than in build/render, and inject dependencies so tests can substitute them. Do not rewrite a working Bloc/Provider/GetX codebase into Riverpod unless the user asks for a migration.
+> **This skill is Riverpod-only.** If the detected project uses Bloc, Provider, or GetX, open the response with `Detected <X>; Riverpod-specific guidance does not apply` and fall back to the state-management-agnostic subset: keep UI state out of widgets, model async work as explicit loading/error/data states, do side effects in event handlers rather than in build/render, release every subscription, timer, and controller on teardown, and inject dependencies so tests can substitute them. Do not rewrite a working Bloc/Provider/GetX codebase into Riverpod unless the user asks for a migration.
 
 ## When to Use
 
@@ -174,7 +174,18 @@ return switch (ref.watch(todosProvider)) {
 };
 ```
 
-During a refresh the previous data remains reachable while `isLoading` is true, so a "refreshing" state can show stale content instead of a full-screen spinner. `ref.invalidate` schedules a rebuild of the provider; `ref.refresh` does the same and returns the new value.
+Both forms above discard previous data in the loading branch, which is correct on first load and wrong on refresh. To keep stale content on screen while refreshing, read `.value` before branching:
+
+```dart
+final async = ref.watch(todosProvider);
+final todos = async.value;                       // survives a refresh
+if (todos != null) {
+  return TodoList(todos, refreshing: async.isLoading);
+}
+return async.hasError ? ErrorView(async.error!) : const LoadingView();
+```
+
+`ref.invalidate` schedules a rebuild of the provider; `ref.refresh` does the same and returns the new value.
 
 ### `family` and `autoDispose`
 
@@ -237,8 +248,10 @@ When invoked from an implementation workflow, emit the provider graph:
 | Todo list | AsyncNotifierProvider<Todos, List<Todo>> | autoDispose | todoRepoProvider | mutations via guard |
 | Auth session | NotifierProvider<Auth, AuthState> | keepAlive | secureStorageProvider | app-lifetime |
 | User by id | FutureProvider.family<User, String> | autoDispose | apiProvider | record arg |
-| TodoRepo | Provider<TodoRepo> | override at root | - | DI seam |
+| TodoRepo | Provider<TodoRepo> | keepAlive | - | DI seam, overridden at root |
 ```
+
+`Scope: {autoDispose | keepAlive}` - lifetime only. A provider bound by a root override records that in Notes, not in Scope.
 
 When invoked from a review workflow, emit one finding block per issue:
 
@@ -253,9 +266,11 @@ When invoked from a review workflow, emit one finding block per issue:
 
 `Severity: {Critical | High | Medium | Low}`. Critical = leaked subscription, unhandled error branch on a user-facing path, or state that silently stops updating. High = misuse that misbehaves under realistic use (duplicate side effects from `build`, family arg without value equality, watch-in-callback). Medium = works today but fragile (legacy provider kinds, missing DI seam, keep-alive without justification). Low = style or naming.
 
+One block per defect, not per code site - a constructor that both leaks a subscription and logs analytics emits two. When a single defect satisfies two rules, file it under the one naming the runtime failure: a subscription that is never released is `disposal`, not `side-effect-in-build`. Missing `autoDispose` files under `disposal`. Order blocks by severity, then by file.
+
 For each rule in the enum with zero findings, emit exactly `No <rule> findings.` so the workflow knows the check ran; omit that line for rules with findings.
 
-In fallback mode (non-Riverpod project), emit the same structures using the detected framework's terms (e.g., Bloc/Cubit kinds in the graph table), and restrict findings to the agnostic subset named in the header.
+In fallback mode (non-Riverpod project), emit the same structures using the detected framework's terms (e.g., Bloc/Cubit kinds in the graph table), with `Scope` becoming that framework's lifetime vocabulary. Findings use only `async-value`, `disposal`, `side-effect-in-build`, `di-override`, `test-override`, and `state-in-widget` (fallback-only, for UI state a widget should not own). The Riverpod-only rules - `ref-lifecycle`, `provider-kind`, `family-equality` - are neither reported nor enumerated as zero-finding lines.
 
 ## Avoid
 

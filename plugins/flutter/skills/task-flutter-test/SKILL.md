@@ -32,7 +32,29 @@ Flutter-aware test strategy and scaffolding across unit, widget, golden, and `in
 
 Accept the project shape from a parent workflow when invoked as a subagent. Otherwise read `pubspec.yaml`. Record state management, navigation, networking client, persistence store, mocking library (mocktail / mockito / hand-written), and whether the project uses code generation.
 
-If state management is not Riverpod, say so and use that library's own test seams rather than provider overrides.
+The project's own tooling wins over this skill's defaults. Where the project differs, say so once and follow the project:
+
+| Default here | If the project differs | What changes |
+|--------------|------------------------|--------------|
+| Riverpod | Bloc / Provider / GetX | Test seam is that library's own - `BlocProvider.value` and `blocTest` for Bloc - not provider overrides |
+| mocktail | mockito | `@GenerateMocks` codegen and bare `when(...)`; `registerFallbackValue` does not exist and its checks are N/A |
+| mocktail | hand-written fakes | No matcher registration at all; assert on the fake's recorded calls |
+
+`bloc_test` is built on mocktail, so a Bloc project on mockito ends up with both. Keep each library to its own file, or alias one import - mixing `when(() => ...)` and `when(...)` in one file does not compile.
+
+### Step 1b - Route the Request
+
+Decide the deliverable before reading code, because it decides what to read:
+
+| Request | Deliverable | Steps that run |
+|---------|-------------|----------------|
+| "Why does this golden/test fail in CI?" | Diagnosis finding blocks | 1, 2 (the failing test and its setup only), 4 |
+| "Write tests for X" / "scaffold" | Test Scaffolds | all |
+| "What tests are missing?" | Coverage Assessment | all |
+| "Test strategy" / "test plan", or low coverage with no scaffolds requested | Strategy Doc | all |
+| Unclear | Strategy Doc | all |
+
+For a strategy or coverage request, Step 7 selects the targets and Step 2 then reads them; run Step 7 first and treat its output as Step 2's reading list.
 
 ### Step 2 - Read Code Under Test + Existing Tests
 
@@ -110,7 +132,7 @@ Golden instability is the dominant failure mode, and it is almost always environ
 - Factory functions with sensible defaults and named overrides, rather than hand-rolled literals repeated per test
 - Fakes over mocks where the collaborator has real behavior worth simulating; mocks where you only need to assert an interaction happened
 - Keep test data minimal - a 100-item fixture for a test asserting one row signals the wrong layer
-- Register fallback values for any custom type used in a mocktail argument matcher, in shared setup rather than per test
+- Satisfy the mocking library's own matcher requirement once in shared setup, not per test: mocktail needs `registerFallbackValue` for any custom type used with `any()`; mockito needs the type in its generated mock spec
 
 ### Step 7 - Prioritization (when coverage is low)
 
@@ -130,6 +152,8 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 
 ### Step 8 - Test Infrastructure Hygiene
 
+Run this against the project. Items that fail or cannot be verified fill the `## Infrastructure Gaps` slot in the Strategy Doc and Coverage Assessment; items that hold need no line. On a Scaffolds or Diagnosis deliverable, apply it silently and raise only what blocks the deliverable.
+
 - [ ] Fonts loaded deterministically before golden tests
 - [ ] Goldens tagged and run in a job that can be excluded from the fast feedback loop
 - [ ] Golden platform expectations documented, so a cross-platform diff is not mistaken for a regression
@@ -142,14 +166,9 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 
 ## Output Format
 
-**Which output to produce:**
+Step 1b routes the request to one deliverable. For 2+ deliverables, emit in this order separated by `---`: Coverage Assessment -> Strategy Doc -> Test Scaffolds.
 
-- "What tests are missing?" -> Coverage Assessment
-- "Write tests for X" / "scaffold" -> Test Scaffolds
-- "Why does this golden/test fail in CI?" -> the diagnosis finding block from `flutter-testing-patterns` (cause + fix); no strategy doc
-- "Test strategy" / "test plan", OR low coverage with no scaffolds requested -> Strategy Doc (optionally with Coverage Assessment)
-- 2+ deliverables -> in this order separated by `---`: Coverage Assessment -> Strategy Doc -> Test Scaffolds
-- Unclear -> default to Strategy Doc
+**Diagnosis:** the finding blocks from `flutter-testing-patterns`, ordered by severity, and nothing else - no strategy doc, no pyramid, no coverage table. Anchor a defect in shared setup (`flutter_test_config.dart`, a `test/support/` helper, CI configuration) to that file and name it in the Test slot; the block's path slot takes whichever file carries the defect. Cost defects - goldens gating the fast job, a suite too slow to run per PR - are in scope for this deliverable and file under the defect whose fix removes the cost. Close with the one-line verification the author should run to confirm the fix.
 
 **Coverage Assessment:**
 
@@ -159,6 +178,7 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 **Stack:** Flutter <version> / Dart <version>
 **State Management:** Riverpod | Bloc | Provider | GetX | none
 **Mocking:** mocktail | mockito | hand-written
+**Coverage:** <N>% measured via <command> | <N>% estimated from test-file density
 **Coverage gaps:**
 
 - **Unit:** [state holders / failure mapping / validators without coverage]
@@ -168,6 +188,14 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 - **Auth and session:** [flows without expiry, refresh, or forced-sign-out coverage]
 
 **Recommended pyramid balance:** Unit [target] / Widget [target] / Golden + integration [target - keep small]
+
+## Test Plan by Target
+
+[the per-target table and `### Coverage Gaps` block from `flutter-testing-patterns`]
+
+## Infrastructure Gaps
+
+[the Step 8 items that failed or could not be verified. Omit when all hold.]
 
 **Prioritization** _(include when coverage is low or gaps exceed 5)_:
 
@@ -186,7 +214,7 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 - Widget tests covering loading, error, empty, and populated
 - Fakes injected through the project's own dependency seam
 - Goldens only where a widget test cannot express the concern, with font and size setup included
-- **Verified before delivery:** run `flutter analyze` and the generated tests. If the environment cannot run them (no Flutter toolchain, no device for integration tests), say which subset was not run rather than implying a clean pass. Never deliver a scaffold that does not analyze cleanly.
+- **Verified before delivery:** run `flutter analyze` and the generated tests, and fix what they surface. When the environment cannot run them (no Flutter toolchain, no device for integration tests), deliver the scaffolds with an explicit `Not verified:` line naming the subset that did not run and the specific things analysis would have caught - symbol names, generated-type accessors, and API shapes taken from simulated reads. A scaffold that failed a check you did run is never delivered.
 
 **Strategy Doc:**
 
@@ -194,14 +222,24 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 ## Flutter Test Strategy
 
 **Objective:** [what this strategy achieves]
+**Coverage:** <N>% measured via <command> | <N>% estimated from test-file density (a file ratio, not line coverage)
 **Pyramid balance:** Unit {x}% / Widget {y}% / Golden + integration {z}%
-**Tooling:** flutter_test, mocktail, provider overrides, integration_test
+**Tooling:** flutter_test, <the project's mocking library>, <the project's DI seam>, integration_test
 **Golden policy:** [which platform generates them, tolerance, how they are regenerated]
 **Network isolation:** [where the client boundary is stubbed]
-**Gaps to close (prioritized):**
+
+## Test Plan by Target
+
+[the per-target table and `### Coverage Gaps` block from `flutter-testing-patterns`]
+
+## Gaps to Close (prioritized)
 
 1. [Highest risk - typically auth/session or failure mapping]
 2. ...
+
+## Infrastructure Gaps
+
+[the Step 8 items that failed or could not be verified, each naming the priority band it blocks. Omit when all hold.]
 ```
 
 ## Self-Check
@@ -210,17 +248,27 @@ Measure, do not guess: run the project's coverage command when the suite runs lo
 
 - [ ] `behavioral-principles` loaded before the workflow ran
 - [ ] Stack confirmed; state management, mocking library, and codegen usage recorded
+- [ ] Request routed to one deliverable at Step 1b
 - [ ] Code under test + existing tests + shared setup read directly
 - [ ] `flutter-testing-patterns` consulted
-- [ ] Non-Riverpod projects use their own test seam rather than provider overrides
+- [ ] Project's own state-management and mocking tooling followed over this skill's defaults
 
 **Strategy / Coverage:**
 
 - [ ] Pyramid mapped to Flutter layers (unit -> state holders; widget -> screens; golden -> visual regression; integration -> journeys)
 - [ ] Boundaries defined: each layer covers what it does best; no duplicated assertions
 - [ ] Risk-based prioritization when coverage is low (P1 auth, P2 integrity, P3 business, P4 churn, P5 presentational)
+- [ ] Coverage number stated and labelled measured or estimated; unmeasurable bands named rather than guessed
 - [ ] Golden policy stated: platform, fonts, tolerance, regeneration discipline
 - [ ] Screens missing loading, error, or empty coverage flagged explicitly
+- [ ] Step 8 failures reported as `## Infrastructure Gaps`, sequenced against the P1-P5 content it blocks
+
+**Diagnosis:**
+
+- [ ] Finding blocks only; no strategy doc or pyramid emitted
+- [ ] Shared-setup and CI defects anchored to the file that carries them
+- [ ] Cost defects filed under the defect whose fix removes the cost
+- [ ] Verification step named for the author to confirm the fix
 
 **Scaffolds:**
 

@@ -22,7 +22,7 @@ Staff-level Flutter/Dart review umbrella. Covers correctness, architecture, AI q
 - Architecture drift detection
 - Pre-commit risk assessment
 
-**Not for:** pre-implementation design (`task-flutter-implement`), single-error triage (`flutter-engineer`), new-system architecture (`task-design-architecture`), single-scope reviews (delegate to perf/security).
+**Not for:** pre-implementation design (`task-flutter-implement`), single-error triage (`flutter-engineer`), single-scope reviews (delegate to perf/security).
 
 ## Depth
 
@@ -31,7 +31,7 @@ Staff-level Flutter/Dart review umbrella. Covers correctness, architecture, AI q
 | `standard` | Default | Phases A-E |
 | `deep` | Architecture changes, post-incident, Principal sign-off | A-E + historical patterns + repo-wide context |
 
-**Auto-promote to `deep`:** After Phase A, if Risk is High/Critical, set depth to `deep` and surface `Depth auto-promoted: standard -> deep (Risk: <level>)`.
+**Auto-promote to `deep`:** After Phase A, if Risk is High/Critical, set depth to `deep` and record it in the Summary's Depth field as `auto-promoted from standard; Risk: <level>`.
 
 ## Scope
 
@@ -49,7 +49,7 @@ This client consumes API contracts rather than designing them: a finding that th
 **Auto-escalation signals:**
 
 - **+Sec:** a token or credential written to `shared_preferences` rather than secure storage, an `http://` URL, a new deep-link or app-link handler, a new platform-channel handler, a WebView, a certificate-pinning change, a secret in source or in a committed `--dart-define` file, biometric or `local_auth` usage, a new runtime permission request
-- **+Perf:** work added inside `build` (I/O, sorting, parsing, allocation), a non-builder list constructor over a dynamic collection, a widget that lost or should have gained `const`, new image loading or decoding, a new isolate or `compute` call, a new `AnimationController`, a large in-memory collection held in state
+- **+Perf:** work added anywhere in the widget layer that belongs below it (I/O, sorting, parsing, allocation) - `build` is the common case, not the only one; a non-builder list constructor over a dynamic collection, a widget that lost or should have gained `const`, new image loading or decoding, a new isolate or `compute` call, a new `AnimationController`, a large in-memory collection held in state
 - **2+ categories -> Full**
 
 There is no `+Ux` scope. Adaptivity, accessibility, and localization are reviewed at baseline depth in Phase E, and designed in `task-flutter-implement`; there is no dedicated UX lens to escalate to.
@@ -89,6 +89,8 @@ Use skill: `review-precondition-check`. Forward `--staged` if passed. If it fail
 
 The handle supplies `mode`, `base`, `current_branch`, `reviewable`, `counts`, and `notes`. Review only the paths in `reviewable`; `counts.binary` and `counts.generated` are excluded already.
 
+Resolve the review set in this order: take the paths listed in `reviewable`, drop any that match this workflow's wider generated-file list, and report what remains. That number is what `files` records; `counts.reviewable` is a hint, not the answer, and a disagreement with it is worth one line in the Summary.
+
 Read the content once and reuse:
 
 - `git diff <base>` for the change body
@@ -115,13 +117,15 @@ Surface decision in Summary; if escalated, append `auto-escalated from Core; sig
 
 Assess the change set as a whole before any line-level finding. Weigh what the change can break: user-facing surface affected, data or schema touched, auth or payment paths involved, how far a failure propagates from the changed code, and whether a defect would be caught before release. Output a single risk level (Low | Medium | High | Critical) with a one-line rationale, before any findings.
 
-**Low-risk short-circuit:** if Risk is Low **and** the change does not touch architecture-relevant files (app entry point, router configuration, auth or session state, the network client, shared base widgets, the theme, on-device schema), skip Phases C-E. Escalated scopes still run (a Step 4 signal fired for a reason); their merged findings join High-Impact Findings. The streamlined report contains Summary, High-Impact Findings (Phase B + any subagent findings), and Next Steps only; Step 8 still writes the report.
+**Low-risk short-circuit:** if Risk is Low **and** the change does not touch architecture-relevant files (app entry point, router configuration, auth or session state, the network client, a widget the diff shows imported by three or more features, the theme, on-device schema), skip Phases C-E. Escalated scopes still run (a Step 4 signal fired for a reason); their merged findings join High-Impact Findings. The streamlined report contains Summary, High-Impact Findings (Phase B + any subagent findings), and Next Steps only; Step 8 still writes the report.
 
 ### Step 5 - Re-evaluate Depth After Phase A
 
-If Risk is High / Critical, set depth to `deep` and surface promotion in Summary **before** Phases B-E.
+Apply the auto-promotion from the Depth table, surfacing it in the Summary **before** Phases B-E.
 
 **Depth precedence:** user flag > this run's auto-promotion.
+
+At `deep`, read `git log` on the touched files for the historical patterns the deep-only checks depend on; without that read, `deep` differs from `standard` only in name.
 
 ### Phase B - Flutter Correctness and Safety
 
@@ -129,10 +133,11 @@ Apply atomic skills; each owns canonical patterns:
 
 - Use skill: `dart-language-patterns` - null safety discipline, exhaustive `switch` over sealed types, `late` misuse, async correctness
 - Use skill: `flutter-widget-patterns` - `const`, keys, lifecycle, `BuildContext` across async gaps
-- Use skill: `flutter-riverpod-patterns` - provider scope, `ref` usage, disposal, side effects outside `build`
+- Use skill: `flutter-riverpod-patterns` if Step 2 detected Riverpod - provider scope, `ref` usage, disposal, side effects outside `build`. On any other library, review state holders against its own conventions and skip this skill rather than loading it for its generic subset
 - Use skill: `flutter-error-handling` - typed failures, no silent swallows, error-to-UI-state mapping
 - Use skill: `flutter-navigation-patterns` if the diff touches routes, guards, or deep links
 - Use skill: `flutter-networking` if the diff touches the network layer
+- Use skill: `flutter-i18n` if the diff touches ARB files, locale handling, or user-facing copy
 - Use skill: `flutter-local-db-migration` if the diff changes the on-device schema. Check installed-version impact directly: whether an older app version already on a device still works after this change - on-device schema readable by the version the user has, serialized data still deserializable, and server contract expectations unchanged for that older build
 
 **Named checks.** Several overlap the atomics above by design - they are the highest-recurrence Flutter defects and must not be lost in a long atomic report. Emit one finding per defect: when an atomic already raised it, keep that finding; never file the same defect twice.
@@ -142,7 +147,7 @@ Apply atomic skills; each owns canonical patterns:
 - **Disposal completeness.** Every `AnimationController`, `StreamSubscription`, `TextEditingController`, `ScrollController`, `FocusNode`, timer, and platform-channel listener created in a `State` is released in `dispose`. A missing release is a leak that survives navigation
 - **`BuildContext` across async gaps.** Any `context` used after an `await` is guarded by a `mounted` check. This is the most common source of "widget disposed" crashes
 - **Unawaited futures.** A future that is fired and not awaited either has an explicit reason or is a bug - errors from it bypass the caller's error handling entirely
-- **Loading, error, and empty states.** A screen that renders data renders all four cases, not just the happy path. Inferring emptiness from a null check alone is a finding
+- **Loading, error, empty, and populated states.** A screen that renders data renders all four, not just the happy path. Inferring emptiness from a null check alone is a finding; a screen with no reachable empty state says so rather than growing one
 - **Secrets and endpoints.** No API keys, tokens, or credentials in source or in committed environment files. Client-side secrets are extractable from a shipped binary regardless of obfuscation
 - **Untrusted input at the edges.** Deep-link parameters, platform-channel arguments, WebView messages, and notification payloads are attacker-controllable and validated before use
 - **On-device schema changes** ship a migration, and old app versions stay installed - the change must be readable by whatever version the user has
@@ -160,7 +165,7 @@ Check the change set for layer violations and coupling drift: a dependency point
 - **Navigation ownership.** Route decisions belong to the router configuration and guards, not scattered imperative pushes inside widgets
 - **Theme and design tokens centralized** rather than per-widget colors and sizes
 - **Platform-conditional code isolated** behind an abstraction rather than sprinkled `Platform.isX` branches through the widget tree
-- **Anemic state holders (deep depth only):** logic in widgets while notifiers only hold fields - flag for extraction. Do not raise on a single change set alone
+- **Anemic state holders (deep depth only):** logic in widgets while state holders only hold fields - flag for extraction. Raise it when the change set itself shows the split, or when `git log` on the touched files shows logic accumulating in the widget layer across commits. One file whose holder merely looks thin is not evidence on its own
 
 **Multi-target changes:** when a change adds or affects a platform target, confirm the platform tier caveats were handled; use skill: `flutter-adaptive-responsive`.
 
@@ -201,11 +206,11 @@ Skip if scope is **Core only**. For each selected scope, spawn one independent s
 
 **Subagent prompt contract:**
 
-- The resolved handle (`mode`, `base`, `current_branch`, `reviewable`) + the pre-read diff (no re-running git)
-- Depth level
-- Pre-confirmed stack (Flutter) + state management, navigation, networking, persistence, and platform targets
+- The resolved handle (`mode`, `base`, `current_branch`, `reviewable`) + the pre-read diff, so no subagent re-resolves the change set. Reading beyond the diff is expected and permitted - perf reads the unchanged file a regression rippled into, security reads manifests, entitlements, build config, and `git log -p` for a removed control
+- Depth level, for +Perf only; +Sec has no depth axis and always runs every step
+- Pre-confirmed stack (Flutter) + state management, navigation, networking, persistence, and platform targets. For +Sec add the fields its own Step 2 needs: secure-storage plugin, WebView presence, platform channels, deep-link mechanism, biometric plugin
 - The generated-file exclusion list
-- Return findings in own Output Format
+- Return the Output Format body, minus the frontmatter and confirmation line
 
 **Failure isolation:** if a subagent fails or times out, continue with the rest. Note the missing scope in Summary.
 
@@ -221,7 +226,7 @@ Merge subagent findings into single Output Format. Do not append raw reports.
 - Merge Next Steps with `[Implement]` / `[Delegate]` tags; re-sort by intent
 - Preserve deep-only sections returned by subagents as their own section after Next Steps - they are not findings; the merge must not drop them
 
-**Lens seams.** One defect can legitimately surface in two lenses: a token cached in an oversized in-memory collection is both security (where it is stored) and perf (what it costs to hold). Keep the storage finding under +Sec and the memory-cost finding under +Perf, deduped to one line at the strongest intent. A hardcoded user-facing string is a Phase E maintainability finding, not +Sec, unless the string is itself a secret.
+**Lens seams.** Two lenses reporting the same `file:line` are one finding or two depending on the defect, not on the lens count. One defect seen twice - a token cached in an oversized collection, where the storage risk and the memory cost are the same cache - merges into one entry at the strongest intent, naming both consequences in its Impact line. Two defects that happen to share a line - a hardcoded string that is both untranslated and unlabelled for a screen reader - stay separate, because each has its own fix. A hardcoded user-facing string is a Phase E maintainability finding, not +Sec, unless the string is itself a secret.
 
 **Cross-phase same root cause.** When one defect spans multiple phases (a layering violation that also degrades testability), file the finding once under the phase where the root cause sits and reference its `file:line` from `Architecture Notes` or `Maintainability Notes`. Do not double-count.
 
@@ -244,7 +249,11 @@ generated_at: <ISO 8601 UTC timestamp>
 ---
 ```
 
-Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the handle's `counts.reviewable`, `scope` = Step 4's resolution mapped to the enum (`Core` -> `core-only`, `+Perf` -> `+perf`, `+Sec` -> `+sec`, `Full` -> `full`), `depth` = the resolved/auto-promoted depth, `generated_at` = the current UTC time in ISO 8601.
+Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the number of paths actually reviewed, `scope` = Step 4's resolution mapped to the enum (`Core` -> `core-only`, `+Perf` -> `+perf`, `+Sec` -> `+sec`, `Full` -> `full`), `depth` = the resolved/auto-promoted depth, `generated_at` = the current UTC time in ISO 8601.
+
+In the confirmation line, `<branch>` is the sanitized form matching the filename, `<N>` is the same value as `files`, and `<scope>` is the frontmatter enum value.
+
+Atomic skills emit `No <category> findings.` lines so the workflow knows a check ran. Those are working notes, not report content - they confirm coverage for the Self-Check and stay out of the report.
 
 After writing, print exactly one confirmation line:
 
@@ -259,7 +268,9 @@ Report written to review-<branch>.md (<N> files, scope: <scope>)
 | [Must]       | Do not merge until this is fixed.                                        |
 | [Recommend]  | Fix, or push back with reasoning. Cannot be silently acked.              |
 
-No `[Question]`, `[Suggestion]`, `[Consider]`, `[Nit]`, `[Nitpick]`, or `[Praise]` - if it isn't `[Must]` or `[Recommend]`, don't write it down.
+Atomic skills grade findings on their own severity scales. Translate on the way in: `Blocker` and `Critical` and `High` -> `[Must]`; `Medium` and `Low` -> `[Recommend]`. A perf finding labelled `unverified` is `[Recommend]` whatever its impact. Nothing else is carried through - the atomic's severity word does not appear in the report.
+
+**Assessment** follows from the labels: any `[Must]` -> `Request Changes`; only `[Recommend]` -> `Approve`, and say so plainly; no findings -> `Approve`. `Discuss` replaces `Request Changes` only when the `[Must]` findings would all be answered by one unresolved direction decision - a refactor whose target architecture is itself in question - and the Summary names that decision.
 
 ## Output Format
 
@@ -319,6 +330,8 @@ _Omit if no actionable findings._
 
 **Omit empty sections.** No Must heading if there are none.
 
+A review with no findings is Summary followed by the single line `No findings.`, and nothing else. A short-circuited review is Summary, whatever findings exist under High-Impact Findings, and Next Steps - Phases C-E contribute no sections.
+
 ## Rules
 
 - Review whole-change system impact, not file-by-file
@@ -340,11 +353,13 @@ _Omit if no actionable findings._
 - [ ] Step 4 - scope auto-escalation evaluated; promotion (or `core-only`) recorded
 - [ ] Step 5 - depth auto-promoted to `deep` when Risk is High/Critical
 - [ ] Risk stated before any finding
-- [ ] Phase B: atomic skills applied; test coverage, disposal, `BuildContext` across async gaps, unawaited futures, UI states, secrets, untrusted edge input checked
-- [ ] Phase C: layering, repository abstraction, provider-based DI, feature boundaries, navigation ownership
+- [ ] Phase B: atomic skills applied, conditional ones only where the diff fires them; test coverage, disposal, `BuildContext` across async gaps, unawaited futures, UI states, secrets, untrusted edge input checked
+- [ ] Phases C-E ran, or the Phase A short-circuit fired and is recorded
+- [ ] Phase C: layering, repository abstraction, DI seam, feature boundaries, navigation ownership
 - [ ] Phase D: complexity and over-engineering checked; `flutter-overengineering-review` applied
 - [ ] Phase E: naming, magic numbers, localization, build length, logging hygiene
 - [ ] Missing tests raised as named finding (not buried)
+- [ ] Atomic severities translated to `[Must]` / `[Recommend]`; Assessment follows from the labels
 - [ ] Every Must cites system risk
 - [ ] Every finding has label + `file:line` + Dart fix
 - [ ] Step 6 - extra scopes ran in parallel with pre-resolved handle and detected project shape
@@ -357,8 +372,6 @@ _Omit if no actionable findings._
 ## Avoid
 
 - State-changing git from this workflow (fetch/checkout/merge/pull/rebase/stash) - uncommitted work is the review subject and must not be disturbed.
-- Raising findings against `*.g.dart`, `*.freezed.dart`, `*.gr.dart`, `*.config.dart`, `*.mocks.dart`, or generated localization output.
-- Emitting `[Question]`, `[Suggestion]`, `[Consider]`, `[Nit]`, `[Nitpick]`, or `[Praise]` labels.
 - Reviewing without reading the full diff first
 - Flagging a project for using Bloc, Provider, or GetX instead of Riverpod
 - Reviewing the server's API contract here - it belongs to the owning service or the architecture plugin

@@ -13,9 +13,7 @@ user-invocable: true
 
 # Flutter Performance Review
 
-Client-side perf review naming the Flutter idiom: work inside `build`, unscoped rebuilds, non-lazy list constructors, full-resolution image decode, UI-isolate blocking, startup work before first frame, installed size growth, and undisposed controllers or subscriptions. Every finding states user-visible impact and labels its evidence as measured or estimated.
-
-Performance review for Flutter projects.
+Client-side perf review naming the Flutter idiom: work inside `build`, unscoped rebuilds, non-lazy list constructors, full-resolution image decode, UI-isolate blocking, startup work before first frame, installed size growth, and undisposed controllers or subscriptions. Every finding states user-visible impact and labels its evidence.
 
 ## When to Use
 
@@ -44,9 +42,11 @@ Perceived slowness that is actually a missing loading state or an unhandled offl
 - **Separate UI-thread jank from raster-thread jank.** They have different fixes: UI thread points at build and layout cost, raster points at painting, clipping, opacity layers, and shader compilation.
 - **Impact, not adjective.** "Rebuilds the full 200-row list on every keystroke" is a finding. "This is slow" is not.
 
-## Generated Code
+## Out of Scope
 
 Generated files are build output, not review surface. Exclude from findings: `*.g.dart`, `*.freezed.dart`, `*.gr.dart`, `*.config.dart`, `*.mocks.dart`, and generated localization output. When a generated file carries the cost, review the source that produces it and cite that source's `file:line`.
+
+Test files carry no user-visible cost, so they produce no perf finding. A slow suite is a testing concern, not this review's.
 
 ## Invocation
 
@@ -71,7 +71,7 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `pubspec.yaml`; if it is absent or declares no `flutter` dependency, stop - this workflow reviews Flutter projects only.
 
-Record: state management (Riverpod / Bloc / Provider / GetX / none), navigation, networking client, persistence store, image loading approach, and the platform targets present.
+Record: state management (Riverpod / Bloc / Provider / GetX / none), navigation, networking client, persistence store, image loading approach, and the platform targets present. Any field the change set and project files do not establish is written `unconfirmed` in the Summary rather than inferred - a wrong stack claim misroutes every finding under it.
 
 If state management is not Riverpod, record it and note in the Summary: `Detected <X>; Riverpod-specific guidance does not apply.` Review rebuild scoping against that library's own selector or listener mechanism.
 
@@ -85,7 +85,7 @@ Read the content once and reuse: `git diff <base>` for the change body, `git dif
 
 ### Step 4 - Read the Performance Surface
 
-Cite real `file:line`. Open:
+Cite real `file:line`. When the source available carries no line anchors, cite the file and name the construct - never invent a number. Open:
 
 - Every changed widget with a `build` method, plus the `State` classes around them
 - Every changed state holder (notifier, bloc, controller) and its provider or dependency wiring
@@ -184,21 +184,25 @@ Use skill: `dart-language-patterns` for isolate and async mechanics.
 
 Label every finding's evidence. Never present an estimate as a measurement, and never cite a debug-mode number at all.
 
+Evidence and impact are independent axes. Evidence records how well the cost is established; impact records what the user feels. A finding can be `estimated` and High Impact, or `measured` and Low.
+
 | Evidence | Use when | Example phrasing |
 |----------|----------|------------------|
-| `measured` | A profile-mode trace, startup trace, or size analysis was supplied | `raster thread 24ms/frame on the feed scroll, Pixel 6, profile mode` |
-| `estimated` | The pattern is unambiguous but no trace exists | `rebuilds all 200 rows on every keystroke` |
-| `unverified` | Cost depends on data only the author has (collection size, image dimensions, device tier) | Raise as `[Recommend]` and name the measurement to run |
+| `measured` | A trace covering **this code path** was supplied | `raster thread 24ms/frame on the feed scroll, Pixel 6, profile mode` |
+| `estimated` | The pattern's cost is unambiguous from the code alone | `rebuilds all 200 rows on every keystroke` |
+| `unverified` | The cost turns on data only the author has (collection size, image dimensions, device tier) | Name the measurement that would settle it |
 
-`flutter-performance` emits only `measured` and `estimated`; `unverified` is this workflow's third bucket for findings that stay `[Recommend]` pending measurement. With no profile data supplied, cap the finding at High Impact - the atomic applies the same cap.
+A trace supplied for part of the change set makes only the paths it covers `measured`; label the rest by the same rules and say where the trace's coverage ends. When both `estimated` and `unverified` fit, the tiebreak is whether a reasonable worst case is still a finding: if yes, `estimated`; if the finding evaporates under a plausible small input, `unverified`.
 
-**Severity mapping.** `flutter-performance` grades findings `Critical | High | Medium | Low`; this report groups by impact. Map `Critical` and `High` to **High Impact**, `Medium` to Medium, `Low` to Low. A `Critical`-origin finding leads the High Impact section and keeps the atomic's rationale (sustained dropped frames or unbounded growth on a primary path) in its impact line - do not silently flatten it into an ordinary High.
+**Impact mapping.** `flutter-performance` grades findings `Critical | High | Medium | Low`; this report groups by impact. Map `Critical` and `High` to **High Impact**, `Medium` to Medium, `Low` to Low. A `Critical`-origin finding leads the High Impact section and keeps the atomic's rationale (sustained dropped frames or unbounded growth on a primary path) in its impact line - do not silently flatten it into an ordinary High.
+
+`unverified` does not lower impact: an unbounded cache on a primary path is High Impact whether or not its size is known. It sets intent instead - every `unverified` finding is `[Recommend]` and names its measurement, including at High Impact, which is the one case where a High Impact finding is not `[Must]`.
 
 Confirm that a hot path introduced here is observable at all; if it is not, raise Low.
 
 ### Step 12 - Write Report
 
-Standalone only. Subagent runs return findings in the Output Format to the parent, which writes the single merged report.
+Standalone only. A subagent run writes no file and prints no confirmation line: it returns the Output Format body - Summary, Findings, Recommendations including any deep-only subsection, and Next Steps - to the parent, which merges it and owns the report. The frontmatter block is standalone-only.
 
 Write the assembled report to `review-perf-<branch>.md` in the current working directory, overwriting the file if it already exists.
 
@@ -217,7 +221,9 @@ generated_at: <ISO 8601 UTC timestamp>
 ---
 ```
 
-Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the handle's `counts.reviewable`, `scope` = `+perf`, `depth` = the depth resolved from the Depth table, `generated_at` = the current UTC time in ISO 8601.
+Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the number of paths actually reviewed, `scope` = `+perf`, `depth` = the depth resolved from the Depth table, `generated_at` = the current UTC time in ISO 8601.
+
+In the confirmation line, `<branch>` is the sanitized form matching the filename, `<N>` is the same value as `files`, and `<scope>` is `+perf`.
 
 After writing, print exactly one confirmation line:
 
@@ -229,15 +235,18 @@ Report written to review-perf-<branch>.md (<N> files, scope: <scope>)
 
 The fence below delimits the template for display only - it is not part of the report. Emit the report body as raw Markdown so headings, tables, and lists render; never wrap the whole report in a code fence.
 
+Every Next Steps item carries exactly one label: `[Must]` or `[Recommend]`. No other label is written.
+
 ```markdown
 ## Flutter Performance Review Summary
 
 **Stack Detected:** Flutter <version> / Dart <version>
 **State Management:** Riverpod | Bloc | Provider | GetX | none
 **Platform Targets:** <list>
-**Measurement Basis:** profile-mode trace on <device> | estimated from code (no trace supplied)
+**Measurement Basis:** profile-mode trace on <device> (covering: <paths>) | estimated from code (no trace supplied)
 **Scope:** Client (Flutter)
-**Overall:** Clean | Issues Found - [count by impact]
+**Overall:** Clean (no findings) | Issues Found - [count by impact, however few]
+**Checks with no findings:** [the Step 5-10 areas that ran clean, named - build path, lists, images, isolates, startup and size, disposal. Omit areas the diff does not touch.]
 
 ## Findings
 
@@ -267,7 +276,7 @@ _Omit empty sections._
 ## Next Steps
 
 Each tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend.
-Impact maps to intent: High -> [Must]; Medium / Low -> [Recommend].
+Impact maps to intent: High -> [Must]; Medium / Low -> [Recommend]. An `unverified` finding is `[Recommend]` at any impact; when its fix is cheap and safe regardless of the measurement, the action names the fix and the measurement together rather than the measurement alone. Order `[Recommend]` items by impact, so an unverified High Impact finding leads its band.
 
 1. **[Implement]** [Must] file:line - [one-line action]
 2. **[Delegate]** [Recommend] [scope: server contract] - [one-line action]
@@ -287,9 +296,11 @@ _Omit if no actionable findings._
 - [ ] `dart-language-patterns` consulted; UI-isolate blocking, isolate threshold, and payload transfer assessed when the diff adds computation
 - [ ] Startup path and size delta assessed when the diff touches bootstrap, dependencies, or assets
 - [ ] Disposal completeness audited for every controller, subscription, timer, ticker, and listener introduced; provider disposal scope checked
-- [ ] Every finding labelled `measured` / `estimated` / `unverified`; no debug-mode timing cited as evidence
+- [ ] Every finding labelled `measured` / `estimated` / `unverified`; no debug-mode timing cited as evidence; a partial trace labelled only the paths it covers
+- [ ] `unverified` findings kept at their true impact and tagged `[Recommend]` with the measurement named
 - [ ] Every finding states user-visible impact, not an adjective
-- [ ] Generated files excluded from findings; the producing source cited instead
+- [ ] Areas that ran clean named in the Summary; unresolvable stack fields written `unconfirmed`
+- [ ] Generated and test files excluded from findings; the producing source cited instead
 - [ ] Findings ordered by impact; quick wins separated from structural changes
 - [ ] Depth honored: `standard` ran all steps; `deep` added the Device & Measurement Plan
 - [ ] Next Steps produced with `[Implement]` / `[Delegate]` tags, ordered Must > Recommend
@@ -310,4 +321,3 @@ _Omit if no actionable findings._
 - Blaming the client for latency that belongs to the server - route it to the owning service
 - Filing a missing loading state or unhandled offline path as a perf finding
 - Optimizing without a measurement plan that would show the fix worked
-- Emitting `[Question]`, `[Suggestion]`, `[Consider]`, `[Nit]`, `[Nitpick]`, or `[Praise]` labels - if it isn't `[Must]` or `[Recommend]`, don't write it down.

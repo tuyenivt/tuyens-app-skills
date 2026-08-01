@@ -44,7 +44,7 @@ Guidance degrades predictably rather than exploding into a full platform matrix.
 | `task-flutter-review`                 | `flutter-tech-lead`              | Staff-level code review umbrella - Phases A-E with Dart and widget idioms; spawns perf and security subagents in parallel. |
 | `task-flutter-review-perf`            | `flutter-performance-engineer`   | Performance review for jank and frame budget, rebuild scoping, `const`, list virtualization, image cache, isolates, startup, app size, memory leaks. |
 | `task-flutter-review-security`        | `flutter-security-engineer`      | Security review for secure storage, certificate pinning, obfuscation, deep-link and platform-channel input, secrets, WebView, biometric, MASVS lens. |
-| `task-flutter-test`                   | `flutter-test-engineer`          | Test strategy and scaffolding across unit, widget, golden, and `integration_test` layers, with mocktail, provider overrides, and golden stability. |
+| `task-flutter-test`                   | `flutter-test-engineer`          | Test strategy, scaffolding, and CI-failure diagnosis across unit, widget, golden, and `integration_test` layers, following the project's own mocking library and test seam. |
 
 > Flutter does not review API contract design - a client consumes API contracts rather than designing them. The concern that does reach clients - an installed old app version must survive a server contract change - is checked inside `task-flutter-review` and `task-flutter-implement`.
 

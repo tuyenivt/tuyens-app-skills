@@ -15,8 +15,6 @@ user-invocable: true
 
 MASVS-shaped client security review: what the app stores on the device, what it sends and how it trusts the response, what it accepts at its edges (deep links, platform channels, WebView, notifications), how it authenticates locally, what the shipped build exposes, and what it leaks. Findings carry an attack scenario and a concrete Dart or platform-config remediation.
 
-Security review for Flutter projects.
-
 **Client boundary.** The client cannot enforce authorization; it can only avoid leaking and avoid being used as a lever. Server-side authentication, authorization, and API security belong to the owning service's plugin; a cross-service trust boundary belongs to the architecture plugin.
 
 ## When to Use
@@ -31,7 +29,7 @@ Security review for Flutter projects.
 
 **Not for:** perf review (`task-flutter-review-perf`), general review (`task-flutter-review`), server-side auth or API security (the owning service's plugin).
 
-**Depth.** This workflow always runs full - security has cliff-edge consequences, and a shipped binary cannot be recalled. Scope by file, not by depth.
+**Depth.** Every step runs on every invocation - security has cliff-edge consequences, and a shipped binary cannot be recalled. Scope by file, not by depth. The frontmatter's `depth` field is therefore always `deep`.
 
 ## Severity Rubric
 
@@ -39,8 +37,12 @@ Security review for Flutter projects.
 | -------- | ---------- |
 | **Critical** | A live credential, signing key, or privileged API secret committed or compiled into a shipped build; certificate validation disabled on a release path; a deep link or exported component reaching an authenticated action with no session check; a WebView JavaScript channel exposing a privileged operation to arbitrary page content; a platform channel that executes an attacker-influenced path or command. Must fix before release; blocks merge. |
 | **High** | Session token or PII in `shared_preferences`, a plaintext file, or an unencrypted local database; sensitive data left backup-eligible; a production endpoint over cleartext `http://`; a biometric gate protecting data with no key binding; session material not cleared on logout; pinning removed with no recorded rationale. Must fix before merge. |
-| **Medium** | Hardening gap with a mitigating control elsewhere: obfuscation absent on a build that embeds no secrets, an over-broad permission, a missing backup pin where rotation is documented, verbose logging confined to a non-release flavour. Should fix in this change or the next. |
+| **Medium** | Hardening gap with a mitigating control elsewhere: obfuscation absent on a build that embeds no secrets, an over-broad permission, a missing backup pin where rotation is documented, verbose logging confined to a non-release flavour. A direct identifier or sensitive category collected or sent to a third party without a consent gate, or a native-code dependency added with no provenance record. Should fix in this change or the next. |
 | **Low** | Defense in depth, a dependency advisory with no reachable path, resilience hardening with no concrete current attack. |
+
+When two clauses match one defect, take the higher tier and name both in the rationale. A removed pinning check that is not scoped away from release is Critical by the validation clause, not High by the pinning clause.
+
+A defect whose severity turns on a fact the diff cannot settle - a keystore's provenance, whether a release build carries a flag, what a vendor SDK transmits - is filed at the severity it carries **if confirmed**, with `pending: <what to check>` appended to the rationale. Do not discount severity for being unverified from a diff.
 
 **Combined-finding rule.** When two findings *compose* on the same path into a worse threat than either alone, file one finding at the elevated severity:
 
@@ -77,13 +79,15 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `pubspec.yaml`; if it is absent or declares no `flutter` dependency, stop - this workflow reviews Flutter projects only.
 
-Record: secure-storage plugin in use, persistence store, networking client, whether a WebView is present, whether platform channels exist, deep-link mechanism, biometric plugin, and the platform targets present. An absent secure-storage dependency in an app that holds a session is itself a signal.
+Record: secure-storage plugin in use, persistence store, networking client, whether a WebView is present, whether platform channels exist, deep-link mechanism, biometric plugin, and the platform targets present. An absent secure-storage dependency in an app that holds a session is itself a signal. Any field the project files do not establish is written `unconfirmed` in the Summary rather than inferred.
 
 ### Step 3 - Resolve the Change Set
 
 Use skill: `review-precondition-check`. Forward `--staged` if passed. **Skip entirely** when the parent supplied the handle plus the pre-read diff. Surface any fail-fast verbatim.
 
 The handle supplies `mode`, `base`, `current_branch`, `reviewable`, `counts`, and `notes`. Review only the paths in `reviewable`; `counts.binary` and `counts.generated` are excluded already.
+
+`reviewable` is authoritative over `counts.reviewable`, and this workflow's generated-file list is the wider one - a path the gate passed through that matches it is still excluded here. Report the number of paths actually reviewed. Reading outside `reviewable` is expected: manifests, entitlements, build config, the lockfile, and prior revisions are security surface whether or not the diff touched them.
 
 Read the content once and reuse: `git diff <base>` for the change body, `git diff --name-status <base>` for the per-file status. Untracked files in `reviewable` do not appear in `git diff <base>`; read those files directly and treat their full contents as added lines.
 
@@ -104,7 +108,9 @@ Cite real `file:line`. Open:
 
 ### Step 5 - MASVS Triage
 
-**Triage pass**, not a findings list. One verdict per group (`yes` / `no signal in diff`). Steps 6-11 produce the findings.
+**Triage pass**, not a findings list. One verdict per group, recording whether the diff touches that group's surface - not whether it produced a finding. `yes` means reviewed and clean or reviewed with findings; the Findings sections carry the outcome. Steps 6-11 produce the findings.
+
+`Verdict: {yes | no signal in diff}`
 
 | Group | Flutter signal | Owning step |
 | ----- | -------------- | ----------- |
@@ -191,6 +197,8 @@ Everything crossing into the process from outside is attacker-controllable: deep
 
 ### Step 10 - Build Hardening and Dependency Hygiene
 
+Use skill: `flutter-build-release` for flavor, signing, obfuscation, and `--dart-define` mechanics.
+
 - [ ] **Release builds obfuscate with split debug info, and the symbol files are archived** for later crash symbolication. Obfuscation renames Dart symbols; it does not encrypt assets, hide strings, or make an embedded secret safe. Any finding whose proposed fix is "we obfuscate" is not fixed
 - [ ] **No debug-only code in release:** debuggable off, debug endpoints and developer feature flags stripped, development trust anchors and proxy overrides absent from release configuration
 - [ ] **Backup behaviour reviewed** - platform defaults will copy app data off the device. Sensitive files are excluded from backup, and Android backup rules are explicit rather than inherited
@@ -205,11 +213,9 @@ Everything crossing into the process from outside is attacker-controllable: deep
 - [ ] **Collection is consent-gated where required**, and the collected set matches the app's published privacy declaration
 - [ ] **Sensitive values are not written to the clipboard** or left in a cache shared with other apps
 
-This step covers only what leaks.
-
 ### Step 12 - Write Report
 
-Standalone only. Subagent runs return findings in the Output Format to the parent, which writes the single merged report.
+Standalone only. A subagent run writes no file and prints no confirmation line: it returns the Output Format body - Summary, MASVS Triage, Findings, Checked and Correct, Recommendations, and Next Steps - to the parent, which merges it and owns the report. The triage table travels with the findings; the parent cannot recompute it. The frontmatter block is standalone-only.
 
 Write the assembled report to `review-security-<branch>.md` in the current working directory, overwriting the file if it already exists.
 
@@ -228,7 +234,11 @@ generated_at: <ISO 8601 UTC timestamp>
 ---
 ```
 
-Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the handle's `counts.reviewable`, `scope` = `+sec`, `depth` = `deep` (this workflow always runs full depth), `generated_at` = the current UTC time in ISO 8601.
+Field sources: `branch` = the handle's `current_branch` (unsanitized), `scope_mode` = the handle's `mode`, `files` = the number of paths actually reviewed, `scope` = `+sec`, `depth` = `deep`, `generated_at` = the current UTC time in ISO 8601.
+
+In the confirmation line, `<branch>` is the sanitized form matching the filename, `<N>` is the same value as `files`, and `<scope>` is `+sec`.
+
+This workflow's rubric governs severity. When an atomic grades the same defect differently, take the rubric's tier and keep the atomic's reasoning in the rationale; where no rubric clause fits, say which clause is nearest and why the finding sits above or below it.
 
 After writing, print exactly one confirmation line:
 
@@ -281,15 +291,23 @@ The fence below delimits the template for display only - it is not part of the r
 
 _Omit severity sections with no findings. If all are omitted: "No security issues found."_
 
+## Checked and Correct
+
+[Security-relevant changes in the diff that are correctly handled and must not be re-raised: a usage-description string added alongside the capability it covers, a debug-scoped trust anchor absent from release, a `--dart-define` carrying a client-visible value rather than a secret. One line each, with why it is correct. Omit when the diff has none.]
+
 ## Recommendations
 
 [Prioritized hardening not tied to a single finding]
+
+## Limitations
+
+[The checks that need repo or device access this run could not perform - merged manifest, release build configuration, native handler source. Omit when all were performed.]
 
 ## Next Steps
 
 Each tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend.
 Severity maps to intent: Critical / High -> [Must]; Medium / Low -> [Recommend].
-A finding whose `flutter-security-patterns` block carries a non-`none` **Server-side dependency** also produces a `[Delegate]` entry naming what the backend must enforce - the client fix alone does not close it.
+Any finding the client cannot close alone also produces a `[Delegate]` entry naming what the backend or another owner must enforce. For findings routed through `flutter-security-patterns`, its non-`none` **Server-side dependency** field states this directly; Step 11 privacy findings have no atomic block, so judge it from the finding - a collection or retention concern the server owns delegates the same way.
 
 1. **[Implement]** [Must] file:line - [one-line action]
 2. **[Delegate]** [Recommend] [scope: server contract] - [one-line action]
@@ -322,6 +340,8 @@ _Omit if no issues found._
 - [ ] Leakage reviewed: logs, crash reports, analytics, consent gating, clipboard
 - [ ] Generated files excluded from findings; the producing source cited instead
 - [ ] Severity rubric applied consistently; combined-finding rule applied where two defects compose on one path
+- [ ] Diff-unverifiable defects filed at their confirmed-severity with `pending:` rather than discounted
+- [ ] Correctly handled security-relevant changes recorded under Checked and Correct
 - [ ] Every finding carries an attack scenario, a regression-risk rationale, or an exposure-dependent framing
 - [ ] Next Steps tagged `[Implement]` / `[Delegate]`, ordered Must > Recommend (omitted only when no issues)
 
@@ -346,4 +366,3 @@ _Omit if no issues found._
 - Reviewing the server's authentication or API contract here - it belongs to the owning service or the architecture plugin
 - Filing a hardcoded user-facing string as a security finding - that is maintainability, unless the string is itself a secret
 - Conflating security with perf or general review
-- Emitting `[Question]`, `[Suggestion]`, `[Consider]`, `[Nit]`, `[Nitpick]`, or `[Praise]` labels - if it isn't `[Must]` or `[Recommend]`, don't write it down.

@@ -23,7 +23,7 @@ user-invocable: false
 - `StatelessWidget` unless the widget owns mutable state or a lifecycle-bound resource (controller, subscription, ticker). State handed down from above is a constructor parameter, not a `State`
 - Every constructor that can be `const` is declared `const`, and call sites actually write `const` - an omitted `const` at the call site discards the whole benefit
 - Extract subtrees into widget classes, never `Widget _buildX()` methods: a method's output has no element of its own, can never be `const`, and always rebuilds with its parent
-- Children whose *identity* can change position (reorder, insert, remove) and that hold state need a `Key`, placed on the root of the subtree whose state must survive - not on an inner node
+- Children whose *identity* can change position (reorder, insert, remove) need a `Key` when anything below them holds state - their own `State`, a descendant's, or element-held state like scroll offset or text selection. Place it on the root of the subtree whose state must survive, not on an inner node
 - `GlobalKey` only for cross-subtree access or moving a subtree while preserving its state; hold it in a field, never construct one in `build`
 - Never touch a `BuildContext` after an `await` without re-checking `mounted` first, and never store a `BuildContext` in a field or hand it to an object that outlives the frame
 - Inherited lookups (`Theme.of`, `MediaQuery.of`, and equivalents) belong in `build` or `didChangeDependencies` - never `initState` or `dispose`
@@ -131,7 +131,7 @@ A `BuildContext` is a handle on a position in the element tree, valid for as lon
 | Hook | Runs | Responsibility |
 |------|------|----------------|
 | `initState` | once, before first build | create controllers, subscriptions, tickers; no inherited lookups |
-| `didChangeDependencies` | after `initState`, then whenever an inherited dependency changes | first inherited reads; react to theme/locale/media changes |
+| `didChangeDependencies` | after `initState`, then whenever an inherited dependency changes | first inherited reads; react to theme/locale/media changes. An inherited lookup in `initState` usually returns a value rather than throwing - it just never registers the dependency, so the cached value goes stale silently |
 | `didUpdateWidget(old)` | parent rebuilt with a new config of the same type and key | diff `old.x` against `widget.x` and re-wire whatever depended on it |
 | `dispose` | once, on removal | cancel, close, and dispose everything `initState` created |
 
@@ -257,10 +257,14 @@ When invoked from an implementation workflow, emit the tree decisions:
 | OrderScreen | Stateless | none | full | reads state from above |
 | OrderList | Stateless | none | ListView.builder | items keyed by id |
 | OrderTile | Stateful | ValueKey(order.id) | self | owns expansion controller |
-| TotalBar | Stateless (const) | none | ValueListenableBuilder | isolates the total |
+| TotalBar | Stateless | none | ValueListenableBuilder | isolates the total |
+| EmptyCartHint | Stateless (const) | none | full | no runtime inputs |
 ```
 
-One row per widget where a decision was made; skip widgets with nothing to decide. Rebuild Scope names the boundary that limits the rebuild: `self`, `full`, or the builder/scoped-list widget doing the limiting.
+One row per widget where a decision was made; skip widgets with nothing to decide.
+
+- `Type: {Stateless | Stateless (const) | Stateful}` - write `(const)` only when every call site can pass `const`
+- `Rebuild Scope` names what limits this widget's own rebuild: `self` when it rebuilds alone, `full` when it rebuilds with its parent, or the name of the builder or scoped-list widget that bounds it
 
 When invoked from a review workflow, emit one block per finding:
 
@@ -275,9 +279,9 @@ When invoked from a review workflow, emit one block per finding:
 
 `[Must]` when the violation crashes, leaks, or loses user-visible state (dead context, missing dispose, missing key on stateful list items, unbounded constraints, stale `initState` capture). `[Recommend]` for cost and clarity (const usage, composition, rebuild scope, `Container` vs `SizedBox`).
 
-When invoked directly to diagnose a symptom, emit the same finding block for the diagnosed cause, citing the pattern section that explains it.
+When invoked directly to diagnose a symptom, emit the same finding block per diagnosed cause, with two changes: the heading is `### [Must | Recommend] <pattern section>` when no source file was supplied, and each block ends with `- Confidence: {Confirmed | Likely | Needs-Source}` - `Confirmed` when the cited code was read, `Likely` when the reported symptom matches one pattern uniquely, `Needs-Source` when more than one cause fits. Rank blocks by confidence, highest first.
 
-For each category with zero findings, emit exactly `No <category> findings.` using the category name from the enum, so the workflow knows the check ran. Omit that line for categories that have findings.
+For each category with zero findings, emit exactly `No <category> findings.` using the category name from the enum, so the workflow knows the check ran. Omit that line for categories that have findings, and omit the enumeration entirely when no source was read - emit `Diagnosed from symptom only; no category sweep performed.` instead.
 
 Generated widget code (`*.g.dart`, `*.freezed.dart`, and other build_runner output) is out of scope - report against the source that generates it.
 

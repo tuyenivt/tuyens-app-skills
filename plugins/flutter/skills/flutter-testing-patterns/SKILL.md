@@ -27,7 +27,7 @@ user-invocable: false
 - `pumpAndSettle` only when pending work is finite. Continuous animation or a repeating timer requires `pump(Duration)`.
 - Goldens are generated and verified on one pinned platform and Flutter version. A golden written on a developer machine and checked in a different CI image is a broken test, not a real diff.
 - Fonts are loaded explicitly before any golden renders. The default test font draws every glyph as a box.
-- Pin every source of nondeterminism a golden can see: surface size, device pixel ratio, clock, randomness, animation state, image sources.
+- Pin every source of nondeterminism a golden can see: surface size, device pixel ratio, text scale, clock, randomness, animation state, image sources.
 - `--update-goldens` output is reviewed as an image diff. Regenerating to make CI green discards the signal the test exists for.
 - One behavior per test, named for the behavior. Never `Future.delayed` to let things settle.
 
@@ -94,7 +94,14 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
 }
 ```
 
-Without this, goldens encode boxes instead of glyphs, so every later typography change passes unnoticed. The path passed to `rootBundle.load` is the asset path as declared in `pubspec.yaml`; fonts shipped by a package need a `packages/<package_name>/` prefix.
+Without this, goldens encode boxes instead of glyphs, so every later typography change passes unnoticed. For a font shipped by a package, *both* arguments take the `packages/<package_name>/` prefix - the `FontLoader` family name and the `rootBundle.load` path:
+
+```dart
+FontLoader('packages/acme_ui/AcmeSans')
+  ..addFont(rootBundle.load('packages/acme_ui/assets/fonts/AcmeSans-Regular.ttf'));
+```
+
+Prefixing only the path loads the font under an unreachable family name: `rootBundle.load` succeeds, no error is raised, and the golden silently renders boxes.
 
 **2. Fix the surface.** Physical size and device pixel ratio change every rendered pixel:
 
@@ -106,7 +113,54 @@ addTearDown(tester.view.reset);
 
 Without the tear-down the override leaks into later tests in the same file, so failures depend on test order.
 
-**3. Set a tolerance deliberately.** The default comparator is an exact byte match, so a single antialiased pixel fails the test. `goldenFileComparator` is a global that can be replaced in `flutter_test_config.dart`; the standard approach subclasses `LocalFileComparator` and overrides its comparison to permit a small fraction of differing pixels. Keep the threshold as low as CI tolerates - a generous tolerance silently accepts real regressions, which is worse than a brittle test.
+**3. Set a tolerance deliberately.** The default comparator is an exact byte match, so a single antialiased pixel fails the test. Replace `goldenFileComparator` in `flutter_test_config.dart`, before `testMain()`:
+
+```dart
+class _Tolerant extends LocalFileComparator {
+  _Tolerant(super.testFile, {required this.tolerance});
+  final double tolerance; // fraction of differing pixels, e.g. 0.005
+
+  @override
+  Future<bool> compare(Uint8List bytes, Uri golden) async {
+    final r = await GoldenFileComparator.compareLists(bytes, await getGoldenBytes(golden));
+    if (r.passed || r.diffPercent <= tolerance) {
+      r.dispose();   // omitting this leaks the diff images for the run
+      return true;
+    }
+    final error = await generateFailureOutput(r, golden, basedir);
+    r.dispose();
+    throw FlutterError(error);
+  }
+}
+
+// LocalFileComparator derives basedir from the *test file* it is given, so
+// hand it the current comparator's own basedir rather than inventing a path.
+final existing = goldenFileComparator as LocalFileComparator;
+goldenFileComparator = _Tolerant(existing.basedir, tolerance: 0.005);
+```
+
+The widget under test must also request the package-prefixed family (`fontFamily: 'packages/acme_ui/AcmeSans'`, usually via `ThemeData`), or the loaded font is never reached and the golden still renders boxes.
+
+Keep the threshold as low as CI tolerates - a generous tolerance silently accepts real regressions, which is worse than a brittle test.
+
+A golden test, with the surface fixed and the capture scoped to the component rather than the whole app:
+
+```dart
+testWidgets('renders in dark theme', (tester) async {
+  tester.view.physicalSize = const Size(1080, 1920);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(MediaQuery(
+    data: const MediaQueryData(textScaler: TextScaler.linear(1.0)),
+    child: MaterialApp(theme: darkTheme, home: const PriceTag(amount: 1299)),
+  ));
+
+  await expectLater(find.byType(PriceTag), matchesGoldenFile('goldens/price_tag_dark.png'));
+});
+```
+
+One golden file per variant, named `<component>_<variant>.png`. Variants of one component share a test file.
 
 **4. Generate and verify on one platform.** Text rasterization and shader output differ across host operating systems and across Flutter versions, so the same widget yields different bytes on macOS and in a Linux CI container. Two workable setups:
 
@@ -115,7 +169,7 @@ Without the tear-down the override leaks into later tests in the same file, so f
 | Run goldens only in the pinned CI job; tag them and skip that tag elsewhere | Low | default choice |
 | Commit per-platform golden directories and select by host platform | High | a team that genuinely reviews goldens on multiple hosts |
 
-Tag with `@Tags(['golden'])` above `library;` at the top of the file, then select that tag with `flutter test --tags golden` in the pinned job and exclude it from the general job. Pin the Flutter version in CI: an engine upgrade legitimately rewrites every golden, and that should land as one reviewed commit rather than as scattered flakes.
+Tag with `@Tags(['golden'])` above `library;` at the top of the file, then run `flutter test --tags golden` in the pinned job and `flutter test --exclude-tags golden` in the general one. Pin the Flutter version in CI: an engine upgrade legitimately rewrites every golden, and that should land as one reviewed commit rather than as scattered flakes.
 
 Diagnosing a drift:
 
@@ -236,6 +290,7 @@ When invoked from a test-strategy workflow, emit the plan as one row per target:
 | login -> home | Integration | Stubbed-Transport | At-Risk | real plugins, device-dependent |
 ```
 
+- `Target` is one row per test file you would write, not per assertion. Variants that share a file collapse into one row (`PriceTag variants`, `PaymentSheet light/dark @1.0/1.3/2.0`); a behavior needing its own file gets its own row.
 - `Layer: {Unit | Widget | Golden | Integration}`
 - `Doubles: {None | Fake | Mock | Stubbed-Transport}`
 - `Determinism: {Deterministic | Needs-Pinning | At-Risk}` - `Needs-Pinning` means it is stable once fonts, surface, tolerance, and platform are fixed; `At-Risk` means a residual source of flake remains and is named in the rationale.
@@ -269,6 +324,8 @@ When invoked from a review workflow or directly to diagnose a flaky test, emit o
 | `Weak-Assertion` | asserts the double was configured, or only that the widget tree built |
 
 `Blocker` = the test lies (passes while the behavior is broken: Weak-Assertion on the only coverage, tolerance raised to green, regenerated golden). `High` = flaky or environment-dependent (Flaky-Pump, Unstable-Golden, Live-Dependency). `Medium` = order-dependence or maintenance drag (Leaky-Double, Wrong-Layer). `Low` = style. If there are no findings, emit exactly `No testing findings.` so the workflow knows the check ran.
+
+One block per defect, not per test - a test with three defects emits three blocks, and a defect in `setUp` that affects every test emits one block naming `setUp` as the Test. Order blocks by severity, then by line.
 
 ## Avoid
 
