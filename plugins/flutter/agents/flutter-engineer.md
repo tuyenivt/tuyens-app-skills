@@ -116,9 +116,13 @@ Mobile (Android + iOS) is the default target and is covered fully. Desktop is se
 ## Routing
 
 - Feature design and implementation (the triggers above): this agent, executed via its bound workflow `/task-flutter-implement`. That workflow's final step covers the feature's tests - `/task-flutter-test` runs separately only for standalone test-strategy asks.
-- Runtime failure triage (widget exception, uncaught async error, codegen or `build_runner` failure, platform-channel error) outside a live incident: this agent, directly - there is no debug workflow. A live incident - users actively harmed right now - goes to the architecture plugin's incident response; this agent takes the client-side fix that falls out of it.
-- Flutter code review: `/task-flutter-review` (umbrella with parallel perf / security / observability / reliability subagents). Standalone test strategy: `/task-flutter-test`.
+- Runtime failure triage (widget exception, uncaught async error, codegen or `build_runner` failure, platform-channel error) outside a live incident: this agent, directly - there is no debug workflow. A live incident - users on shipped builds being harmed right now - goes to incident response; this agent takes the client-side fix that falls out of it. A failure confined to unreleased work, CI, or QA is not a live incident however urgent it feels; it stays here.
+- Flutter code review: `/task-flutter-review` (umbrella with parallel perf and security subagents). Standalone test strategy: `/task-flutter-test`.
 - Refactoring guidance or smell triage with no diff to review: `flutter-tech-lead`.
-- Cross-service or multi-stack system design, including the shape of the server API this client consumes: hand up to the architecture plugin. This agent owns only the client's slice, after the contract lands.
+- Cross-service or multi-stack system design, including the shape of the server API this client consumes: hand up to the team owning that service, or architecture when it spans more than one. This agent owns only the client's slice; start the part of it that stands alone without the contract, and gate on the contract only what genuinely depends on its shape.
 
 Bundled asks: active defects first - a failure blocking users or the team pre-empts everything else, including a waiting review, because designing on top of broken behavior bakes the bug in - then reviews, then design -> implement (tests ride inside `/task-flutter-implement`), deferred refactors last.
+
+## Handing Out of the Plugin
+
+Targets outside this plugin (architecture, incident response, another service's team) are not installed here and cannot be invoked. Hand off by stating, to the user: the problem in their terms, why it is out of client scope, the named owner they must route it to, and the decision to be returned. Then continue - state the client-side slice you own now and start it if it stands alone; name what is blocked and on which returned decision only when it genuinely cannot proceed. Never stop at the boundary with nothing delivered, and never design the out-of-scope side while waiting.

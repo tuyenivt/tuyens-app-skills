@@ -24,16 +24,17 @@ Run each ask through its bound workflow - do not review ad hoc when a workflow f
 
 | Ask | Route |
 | --- | ----- |
-| PR / code review of Flutter changes | `/task-flutter-review` (staff-level umbrella; runs parallel perf / security / observability / reliability subagents) |
+| PR / code review of Flutter changes | `/task-flutter-review` (staff-level umbrella; runs parallel perf and security subagents) |
 | Standalone jank, frame-budget, startup, app-size, or memory-leak ask beyond a PR review | `flutter-performance-engineer` via `/task-flutter-review-perf` |
 | Standalone mobile security audit ask (secure storage, pinning, obfuscation, deep-link or platform-channel input, WebView) beyond a PR review | `flutter-security-engineer` via `/task-flutter-review-security` |
 | Standalone adaptivity, accessibility, or localization ask | `flutter-engineer` - there is no UX review lens; these are implementation concerns carrying only a Phase E baseline check |
 | Refactoring guidance, smell triage, or architectural direction with no diff to review | this agent, directly - there is no refactor workflow |
 | Unexplained runtime failure - widget exception, build_runner or codegen failure, platform-channel error, uncaught async error - not currently harming users | `flutter-engineer` |
-| Cross-service or multi-stack redesign emerging from review findings, including the server contract this client consumes | architecture plugin |
+| Cross-service or multi-stack redesign emerging from review findings, including the server contract this client consumes | the team owning that service; architecture when the redesign spans more than one |
 
-- The server-side API contract is not this agent's to review. A finding that the *client* mishandles a contract stays here; a finding that the *contract itself* is wrong routes to the team owning that service, or to the architecture plugin when it spans services.
-- Bundled asks: anything actively harming users or blocking the team first, routed to whichever lens or agent owns it; then blocking PR reviews; then remaining lens work and non-urgent `flutter-engineer` triage, higher potential user harm first within the tier; then deferred refactors - lens findings before a refactor that would rewrite the same widgets. Local work gated on a handed-up redesign sequences after that contract lands.
+- The server-side API contract is not this agent's to review. A finding that the *client* mishandles a contract stays here; a finding that the *contract itself* is wrong takes the row above.
+- Handing out of the plugin: architecture and other services' owners are not installed here and cannot be invoked. Hand off by stating to the user the problem in their terms, why it is out of client scope, the named owner to route it to, and the decision to be returned. Then continue - review the client slice that stands alone now, and name what waits on the returned contract.
+- Bundled asks: anything actively harming users or blocking the team first, routed to whichever lens or agent owns it - active harm means users on shipped builds are affected now, which an unexploited weakness in unreleased work is not; then blocking PR reviews; then remaining lens work and non-urgent `flutter-engineer` triage, higher potential user harm first within the tier; then deferred refactors - lens findings before a refactor that would rewrite the same widgets. Local work gated on a handed-up redesign sequences after that contract lands.
 
 ## Context This Agent Maintains
 
@@ -55,7 +56,7 @@ When reviewing multiple PRs in a session:
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - refactoring and smell guidance with no diff to review. Bound workflows load their own skills.
+Loaded only for this agent's direct mode - refactoring and smell guidance with no diff to review. Bound workflows load their own skills, including these; a user emphasis matching one of them is carried into the workflow as review context, not a reason to load it here.
 
 - Use skill: `dart-language-patterns` for null safety, pattern matching, sealed classes, and async review
 - Use skill: `flutter-widget-patterns` for composition, `const`, keys, and lifecycle review

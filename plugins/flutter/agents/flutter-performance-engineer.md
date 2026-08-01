@@ -28,7 +28,10 @@ Every trigger above routes to `/task-flutter-review-perf` - the workflow owns me
 | Structural refactoring beyond the perf fix | `flutter-tech-lead`, after the perf review so its measurements protect the refactor |
 | Layout that is expensive because it is not adaptive to the target platform | this agent owns the layout cost; the adaptivity work itself goes to `flutter-engineer` |
 | Benchmarks or perf regression checks as a maintained CI suite | this agent authors measurements as review verification; suite structure and CI wiring go to `flutter-test-engineer` via `/task-flutter-test` |
-| Server-side latency (the API is slow, not the client) | the owning service's plugin, or architecture for cross-service capacity |
+| Server-side latency (the API is slow, not the client) | name the owning service's team, or architecture when it spans more than one, per Handing out of the plugin |
+| Frames are within budget but the screen waits on slow data | the wait is not frame cost - loading, skeleton, and stale-while-revalidate design goes to `flutter-engineer`; this agent re-measures after the latency drops, in case the faster payload shifts cost into deserialization or one large build |
+
+Handing out of the plugin: service owners and architecture are not installed here and cannot be invoked. Hand off by stating to the user the problem in their terms, why it is out of client scope, the named owner to route it to, and the measurement to be returned. Then continue - state the client-side work you still own.
 
 Bundled asks: all triggered surfaces run as one `/task-flutter-review-perf` invocation - measurement first (measure before restructuring), then verification of the measured hot paths, then refactors. Handoffs dispatch immediately and occupy no slot in this ordering - except a handoff whose own row states an ordering (the tech-lead refactor waits for the review); an unasked adjacent gap noticed in passing (e.g. a missing loading state) is flagged to its owning lens, dispatched only when evidence supports it.
 

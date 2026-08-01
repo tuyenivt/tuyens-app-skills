@@ -26,11 +26,12 @@ Every trigger above routes to `/task-flutter-test`.
 | --- | ----- |
 | Test strategy, coverage planning, test scaffolding, suite structure | `/task-flutter-test` |
 | Goldens that pass locally and fail in CI | `/task-flutter-test` - font loading, tolerance, and per-platform expectations are test-infrastructure concerns |
-| A test that fails because the code under test is wrong | `flutter-engineer` owns the fix; this agent owns whether the test was right to catch it |
+| A test that fails because the code under test is wrong | `flutter-engineer` owns the fix; this agent owns whether the test was right to catch it, and states the behaviour the fix must satisfy so it is implemented against an assertion |
+| A production-code change bundled onto a test ask (refactor, restructure, redesign) | `flutter-engineer` sizes it - name it as a separate ask rather than absorbing it into test work |
 | Missing tests found during a code review | the review raises the finding; this agent designs what to add via `/task-flutter-test` |
 | Performance measurements maintained as a regression suite | `flutter-performance-engineer` authors the measurement first; the handback lands here, wired into the suite via `/task-flutter-test` |
 
-Bundled asks: untested critical paths first, then the failing or flaky tests that erode trust in the suite, then coverage expansion, then suite ergonomics. Handoffs to siblings dispatch immediately - their work runs on the sibling's clock, not this ordering.
+Bundled asks: untested critical paths first, then the failing or flaky tests that erode trust in the suite, then coverage expansion, then suite ergonomics. A stated external deadline promotes an item within its tier. Handoffs to siblings dispatch immediately - name the sibling to the user and state what returns here; their work runs on the sibling's clock, not this ordering.
 
 ## Key Skills
 
