@@ -24,7 +24,7 @@ user-invocable: false
 - A move returns a **new state**; it never mutates the state passed in. Reversibility comes from keeping the previous value, not from writing an inverse operation
 - A move returns whether it **changed anything**. "No tile moved" is a distinct outcome from "the move was illegal", and both differ from a successful move
 - Randomness arrives as an injected seeded source. `UnityEngine.Random` and an unseeded `System.Random` both make a bug unreproducible
-- Every resolution loop has a **stated termination bound** checked in code. An unbounded cascade is a hang, not a slow frame
+- Every resolution loop has a **stated termination bound**. Where termination depends on rule content that can change (a cascade whose refill may re-match), the bound is a counter checked in code; where it is provable from the loop condition itself (a search relaxing strictly decreasing costs), assert the bound in a test instead. An unbounded cascade is a hang, not a slow frame
 - Grid indexing uses one documented convention throughout - row-major or column-major, origin corner named, applied identically in rules, input, and rendering
 - Validation and application are separate: `IsLegal(state, move)` answers a question, `Apply(state, move)` produces a state. A method that both checks and mutates cannot be used to build a legal-move list
 
@@ -158,7 +158,9 @@ Requirements this buys, all of which are common in the target genres:
 - **Replay**: seed plus the move list reproduces the game exactly; store those instead of every frame
 - **Reproducible bug reports**: seed plus moves is the whole repro
 
-Two constraints. Save the **generator's position** (or the move count that reconstructs it), not just the seed, or a resumed game diverges from the original. And do not assume `System.Random`'s sequence is stable across .NET runtime versions - if cross-version reproducibility matters, implement a small explicit PRNG (xorshift, PCG) in the rules assembly so the sequence is yours.
+Three constraints. Save the **generator's position** (or the move count that reconstructs it), not just the seed, or a resumed game diverges from the original. Do not assume `System.Random`'s sequence is stable across .NET runtime versions - if cross-version reproducibility matters, implement a small explicit PRNG (xorshift, PCG) in the rules assembly so the sequence is yours.
+
+The third only binds when a replay must reproduce on a *different machine* than it recorded on - lockstep multiplayer, a shared daily leaderboard, a replay file opened on another device. Three things desync before the PRNG does: `float`/`Mathf` results differ across IL2CPP and Mono and across ARM and x64, so rules math is integer or fixed-point; `Dictionary` and `HashSet` iteration order is not part of the .NET contract, so any rule iterating one needs an explicit sort; and `List.Sort` is introsort and unstable, so its comparer must be a total order with no equal elements. A same-device replay is unaffected by all three.
 
 ### Advancing the loop
 
@@ -176,10 +178,14 @@ Cap the number of catch-up steps per frame (backgrounding produces a huge `dt`),
 
 ## Output Format
 
-When reviewing, emit one block per finding:
+Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding:
 
 ```
-### [Severity] {file:line | asset path | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path | symptom, when no source was supplied}
 
 - Category: {Mutation | Determinism | Termination | GridIndexing | PhaseModel | EngineCoupling | LegalitySeam | SnapshotIntegrity}
 - Evidence: {source | inferred (state what was not seen)}
@@ -192,11 +198,11 @@ When reviewing, emit one block per finding:
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
-`Evidence: inferred` is required whenever the source was not read, and caps the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Impact`.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |

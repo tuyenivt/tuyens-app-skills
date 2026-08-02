@@ -146,10 +146,14 @@ Unity's non-allocating overloads exist across physics, mesh, and component APIs;
 
 ## Output Format
 
-When reviewing, emit one block per defect, highest severity first. One line tripping several categories is one block under the category that carries the fix; name the others in `Impact`.
+Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per defect. highest severity first. One line tripping several categories is one block under the category that carries the fix; name the others in `Impact`.
 
 ```
-### [Severity] {file:line | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {DestroyedObjectNullCheck | HotPathAllocation | Boxing | StringAllocation | ClosureCapture | AsyncLifetime | CollectionReuse | NullableAnnotation}
 - Evidence: {source | inferred (state what was not seen)}
@@ -162,11 +166,11 @@ When reviewing, emit one block per defect, highest severity first. One line trip
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
-`Evidence: inferred` is required whenever the source was not read, and caps the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Impact`. A finding whose severity depends on an unseen declaration (whether a field is a `UnityEngine.Object`) is `inferred`, and `Fix` states the check that settles it.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces. A finding whose severity depends on an unseen declaration (whether a field is a `UnityEngine.Object`) is `inferred`, and `Fix` states the check that settles it.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |

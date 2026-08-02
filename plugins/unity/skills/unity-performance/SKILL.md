@@ -22,7 +22,8 @@ user-invocable: false
 
 - **Measure with the Profiler attached to a development *build* on a real target device.** Editor Play-mode timings are not the game: the editor runs extra tooling, uses a different scripting backend than the shipped IL2CPP build, and hides device thermal and GPU limits. An editor number is not evidence
 - Development builds carry profiler instrumentation and deep-call overhead. Use them to find *where* the cost is; confirm the shipped number in a non-development build (`unity-build-release`)
-- Frame budget is **16ms at 60fps, 33ms at 30fps**. Read the project's `Application.targetFrameRate` before assuming 60 - casual 2D games commonly ship 30fps deliberately for battery and thermal headroom, and 30 stable beats 60 unstable
+- Frame budget is **16ms at 60fps, 33ms at 30fps**. Read the project's `Application.targetFrameRate` before assuming 60 - casual 2D games commonly ship 30fps deliberately for battery and thermal headroom, and 30 stable beats 60 unstable. When the target is stated by a person rather than read from the project, say so and use the stated figure
+- `Owner: Memory` and `Owner: Load` need their own budgets, since a frame figure says nothing about either. Memory: a 3GB Android device gives a game roughly 1GB before the OS starts killing it, so state total against that ceiling and split managed from native - they have different causes and different fixes. Load: cold start to first playable, measured from process start on a mid-tier device, not from the editor's first frame
 - **Per-frame managed allocation is the dominant mobile Unity performance failure.** Steady garbage forces collections, and a collection during play is a visible hitch. Target zero allocation in the steady-state frame loop
 - Never `Instantiate`/`Destroy` in a spawn loop or per-frame path. Pool
 - Attribute an overrun to CPU (main thread), GPU (fill rate/draw calls), or GC before changing anything. The Profiler timeline names which
@@ -171,10 +172,14 @@ Element lifetime, UXML structure, and panel scaling belong to `unity-ui-patterns
 
 ## Output Format
 
-When invoked from a review workflow or for a direct performance investigation, emit one block per finding:
+Two modes, chosen by whether the request supplies something to diagnose or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was measured, so a not-run line would misdescribe the work.
+
+**Review mode** - a review workflow, or a direct performance investigation with a profile, source, or symptom report. Emit one block per finding:
 
 ```
-### [Severity] {file:line | asset path | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path | symptom, when no source was supplied}
 
 - Category: {GCAllocation | UpdateCost | Instantiation | DrawCalls | Overdraw | TextureMemory | Physics2D | UIRepaint | LoadTime | BuildSize}
 - Evidence: {measured (device, build) | estimated (no profile) | inferred (no source read)}
@@ -189,11 +194,13 @@ When invoked from a review workflow or for a direct performance investigation, e
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Cost`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Cost`; where it fits none, pick the closest and name the real concern in `Cost`.
 
-**Evidence gating.** `Evidence: measured (device, build)` requires a Profiler capture from a development build on a physical target device - name the device and build type. Anything else is `estimated (no profile)`. Use `inferred (no source read)` when the finding comes from a bug report, a CI log, or a stated fact rather than from source you read - state what was not seen. Never report a number you did not measure. Both `estimated` and `inferred` cap the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Cost`.
+**Evidence gating.** `Evidence: measured (device, build)` requires a Profiler capture from a development build on a physical target device - name the device and build type. Anything else is `estimated (no profile)`. Use `inferred (no source read)` when the finding comes from a bug report, a CI log, or a stated fact rather than from source you read - state what was not seen. Never report a number you did not measure. When no profile and no source were supplied, `inferred (no source read)` wins - it is the stronger claim about what was not seen.
+
+Both `estimated` and `inferred` bound the header at High: a Critical-band defect is written High, and `Cost` names the uncapped band. Neither ever raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |

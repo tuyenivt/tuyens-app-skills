@@ -28,7 +28,7 @@ Performance review for Unity projects.
 
 **Not for:** general review (`task-unity-review`), security (`task-unity-review-security`), pre-implementation design (`task-unity-implement`).
 
-Perceived slowness that is actually a missing loading state, an unhandled offline path, or a permanent spinner is not a perf finding.
+Perceived slowness that is actually a missing loading state, an unhandled offline path, or a permanent spinner is not a perf finding. Route it out rather than dropping it: a `[Delegate]` Next Step naming `task-unity-review` and the defect. The same applies to a build-configuration defect the diff surfaces but does not cause - name it and delegate.
 
 ## Depth
 
@@ -41,7 +41,7 @@ Perceived slowness that is actually a missing loading state, an unhandled offlin
 
 - **The Profiler attached to a development build on a real target device is the only valid timing source.** Editor Play mode runs extra tooling on a different scripting backend than the shipped IL2CPP build and hides device thermal and GPU limits. An editor number is not evidence.
 - **A development build is where you find cost, not where you confirm it.** Profiler instrumentation and disabled optimizations inflate it; the shipped number comes from a non-development build.
-- **State the frame budget the project actually targets** - 33ms at 30fps, 16ms at 60fps. Read `Application.targetFrameRate` rather than assuming 60; casual 2D commonly ships 30 deliberately.
+- **State the frame budget the project actually targets** - 33ms at 30fps, 16ms at 60fps. Read `Application.targetFrameRate` rather than assuming 60; casual 2D commonly ships 30 deliberately. Where it is set nowhere in the project, grade against **33ms** and raise the unset target as its own finding: the runtime then chases the panel rate, which is what thermally throttles a budget device.
 - **Attribute before fixing.** Every finding names CPU (main thread), GPU (fill rate or draw calls), GC, memory, or load as its owner. The wrong fix costs the same effort as the right one.
 - **Impact, not adjective.** "500 `Update` calls per frame on tiles that change once a move" is a finding. "This is slow" is not.
 
@@ -183,12 +183,25 @@ Label every finding's evidence. Never present an estimate as a measurement, and 
 
 | Evidence | Use when | Example phrasing |
 |----------|----------|------------------|
-| `measured (device, build)` | A Profiler, Memory Profiler, Frame Debugger, or build-report capture from a development build on a named physical device | `1.4 KB/frame GC.Alloc on the cascade resolve, Pixel 6a, development build` |
-| `estimated (no profile)` | The pattern is unambiguous but no capture exists | `500 Update calls per frame across the tile grid` |
+| `measured (device, build)` | A Profiler, Memory Profiler, Frame Debugger, or build-report capture from a development build on a named physical device, **covering the code under review** | `1.4 KB/frame GC.Alloc on the cascade resolve, Pixel 6a, development build` |
+| `estimated (no profile)` | The pattern is unambiguous but no capture covers it | `500 Update calls per frame across the tile grid` |
+
+**A capture taken before the change is not a measurement of the change.** It measures the baseline the change lands on. Label findings about the diff `estimated (no profile)` and cite the capture as the baseline in the impact line; reserve `measured` for a condition the capture actually observed. A pre-change capture still raises depth to `deep` - the Device & Measurement Plan is exactly what a baseline-only capture calls for.
 
 `unity-performance` emits these values, plus `inferred (no source read)` when the review ran without source access. **With no profile supplied, cap the finding at High Impact** - the atomic applies the same cap. `inferred` is capped at High for the same reason.
 
-**Intent precedence over the cap.** The cap bounds *impact*, not *intent*. A finding whose cost depends on data only the author has (board size, device tier, atlas contents) stays `[Recommend]` and names the measurement to run, **even at High Impact** - the author-data rule wins over the High-to-Must mapping. `[Must]` at High Impact requires either a measurement or a defect whose cost is unconditional on the shipped path (per-frame allocation in `Update`, a material split on every tile). Without one of those, write `[Recommend]`.
+**Intent precedence over the cap.** The cap bounds *impact*, not *intent*. A finding whose cost depends on data only the author has stays `[Recommend]` and names the measurement to run, **even at High Impact**. `[Must]` at High Impact requires either a measurement or a defect whose cost is unconditional on the shipped path.
+
+The test is whether the defect's cost is derivable from the diff alone:
+
+| Cost derivable from | Intent | Examples |
+| --- | --- | --- |
+| The diff itself - the code or the import setting *is* the evidence, and the arithmetic follows | `[Must]` | per-frame allocation in `Update`; a material split per instance; a 2048 RGBA32 import for a 96px sprite - the memory figure is arithmetic, not estimation |
+| Data only the author or a device has - device tier, board size, atlas contents, or a coverage the diff does not state | `[Recommend]` | overdraw whose layer coverage is unknown; whether an atlas overflows its page; anything whose magnitude needs a capture |
+
+Coverage the diff states is diff-derivable: *N* stacked **full-screen** transparent layers is `[Must]`, because the multiplier is given. *N* transparent layers of unstated extent is `[Recommend]`.
+
+Within a band, order by fix dependency. A `Critical`-origin finding capped to High keeps the atomic's rationale in its impact line, and where fix dependency would place it below another finding, say so in one clause rather than reordering.
 
 **Severity mapping.** `unity-performance`, `csharp-unity-patterns`, `unity-2d-rendering`, and `unity-build-release` grade findings `Critical | High | Medium | Low`; this report groups by impact. Map `Critical` and `High` to **High Impact**, `Medium` to Medium, `Low` to Low. A `Critical`-origin finding leads the High Impact section and keeps the atomic's rationale (sustained missed frame budget, unbounded memory growth, OOM-risk load on the target tier) in its impact line - do not flatten it into an ordinary High.
 
@@ -196,7 +209,9 @@ Confirm that a hot path introduced here is observable at all; if it is not, rais
 
 ### Step 11 - Write Report
 
-Standalone only. Subagent runs return findings in the Output Format to the parent, which writes the single merged report.
+Standalone only. A subagent run returns the `## Findings` sections and, at `deep`, the `## Device & Measurement Plan` - nothing else. No frontmatter, no Summary block, no Recommendations, no Next Steps: the parent owns those and cannot merge two of them. Project-shape values the parent already supplied are not echoed back.
+
+A subagent that has something for `Unattributed` - a reported symptom the change set does not explain, or a capture-revealed condition it did not cause - returns it as a final `## Unattributed` section for the parent to fold into its Summary. Intent (`[Must]` / `[Recommend]`) is stated per finding so the parent can order Next Steps without re-deriving it.
 
 Write the assembled report to `review-perf-<branch>.md` in the current working directory, overwriting the file if it already exists.
 
@@ -236,6 +251,7 @@ The fence below delimits the template for display only - it is not part of the r
 **Platform Targets:** <list>
 **Scope:** Client (Unity)
 **Overall:** Clean | Issues Found - [count by impact]
+**Unattributed:** [reported symptoms this change set does not explain, and any capture-revealed condition the diff did not cause - each with what would attribute it | none]
 
 
 Summary field whose observed state matches no listed value: write the closest value followed by ` - <what was actually observed>` rather than forcing a wrong one or omitting the line. Every field is always present.
@@ -244,7 +260,7 @@ Summary field whose observed state matches no listed value: write the closest va
 
 ### High Impact
 
-- **Location:** [file:line | asset path | setting | symptom, when no source was supplied]
+- **Location:** [file:line | asset path | setting | symptom, when no source was supplied. Where the defect body and the change that mounts it are different files, write `<mount site> -> <defect body>` and name which one the diff touched]
 - **Issue:** [name the Unity idiom: string interpolation per frame, 500 `Update` calls across the tile grid, `Instantiate` per shot with no pool, material duplicated per tile splitting the batch, 6 stacked full-screen transparent layers, 2048 atlas imported for a 200px sprite, synchronous `LoadScene` on the level transition]
 - **Player-Visible Impact:** [what the player experiences: "a hitch every few seconds on the board", "wave start drops ~8 frames", "unplayable on a 3GB-RAM device", "3.2s freeze on level load"]
 - **Owner:** CPU | GPU | GC | Memory | Load - name the dominant one and cite the second in `Player-Visible Impact` when a defect genuinely has two (a per-frame string assign is GC for the allocation and CPU for the re-tessellation it triggers)
@@ -262,15 +278,17 @@ _Omit empty sections. If all are omitted: "No performance issues found."_
 
 [Structural improvements not tied to a single finding]
 
-### Device & Measurement Plan _(deep depth only)_
+## Device & Measurement Plan _(deep depth only)_
 
-[Which device tiers to measure on, which capture to take, and the number that decides whether the fix worked]
+[Which device tiers to measure on, which capture to take, and the number that decides whether the fix worked. A top-level section, so a subagent returns it without its parent]
 
 ## Next Steps
 
 Each tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend.
-Impact maps to intent: High -> [Must]; Medium / Low -> [Recommend].
 Every finding carries exactly one label: `[Must]` or `[Recommend]`. No other label is written.
+Intent comes from Step 10, not from the impact band: High Impact is `[Must]` only with a measurement or an unconditional shipped-path cost, and `[Recommend]` otherwise; Medium and Low are always `[Recommend]`.
+Within a band, order by fix dependency - the finding whose fix others depend on, or which subsumes another, goes first.
+Cite an asset finding at its asset path where it has no meaningful line; `file:line` is for source.
 
 1. **[Implement]** [Must] file:line - [one-line action]
 2. **[Delegate]** [Recommend] [scope: server contract] - [one-line action]
@@ -289,8 +307,9 @@ _Omit if no actionable findings._
 - [ ] Step 7: `unity-2d-rendering` consulted; material variants, atlas membership, sorting interleave, and overdraw sources checked
 - [ ] Step 8: texture max size, compression format, mipmaps, physics use, rigidbody presence, and UI Toolkit query and repaint cost checked
 - [ ] Step 9: `unity-build-release` consulted when build config changed; async scene load, dependency graph, `Resources` additions, cold start, size delta, and any ECS proposal assessed
-- [ ] Step 10: every finding labelled `measured (device, build)` or `estimated (no profile)`; no editor timing cited; estimated findings capped at High; atomic severities mapped to impact bands
-- [ ] Step 11: standalone: report written to `review-perf-<branch>.md` with the sanitized branch name and complete frontmatter (`branch`, `scope_mode`, `files`, `scope`, `depth`, `generated_at`); confirmation line printed; subagent: findings returned to parent, no file written
+- [ ] Step 10: every finding labelled `measured (device, build)` or `estimated (no profile)`, with a pre-change capture treated as baseline rather than measurement; no editor timing cited; estimated findings capped at High; atomic severities mapped to impact bands; intent taken from the derivable-cost test, not from the impact band
+- [ ] Step 11: standalone: report written to `review-perf-<branch>.md` with the sanitized branch name and complete frontmatter (`branch`, `scope_mode`, `files`, `scope`, `depth`, `generated_at`); confirmation line printed; subagent: Findings (plus the deep-only plan) returned to parent, no Summary or Next Steps, no file written
+- [ ] Reported symptoms the change set does not explain, and excluded non-perf defects, recorded in `Unattributed` or delegated rather than dropped
 - [ ] Excluded surfaces raised no findings; `.meta` defects cited at the asset; scenes, prefabs, and `.asset` files treated as reviewable
 - [ ] Every finding states player-visible impact and names its owner (CPU / GPU / GC / Memory / Load)
 - [ ] Depth honored: `standard` ran all steps; `deep` added the Device & Measurement Plan

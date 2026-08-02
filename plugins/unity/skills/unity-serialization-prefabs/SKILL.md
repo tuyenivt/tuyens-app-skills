@@ -88,6 +88,19 @@ Its pitfalls are real and cost data:
 
 Where the polymorphism is really "one of several authored configurations", a `ScriptableObject` reference is simpler, diffs better, and is shared rather than copied.
 
+Note that `[SerializeReference]` list *elements* can be null, unlike by-value serialized fields - a null element is the visible symptom of `ManagedReferenceMissingType`, so guard elements individually rather than assuming the list is dense.
+
+### Renaming a serialized field
+
+`[FormerlySerializedAs("oldName")]` (`UnityEngine.Serialization`) is the field-rename counterpart to `[MovedFrom]`. The serializer matches stored data to fields by name, so a rename without it leaves every existing asset with an orphaned entry and the new field at its type default - silent data loss across every prefab and scene at once.
+
+The ordering is what makes it safe, and it is easy to get wrong:
+
+1. Add the attribute in the **same commit** as the rename. A commit that renames without it loses data on the next import.
+2. Let the assets reimport, then **force a rewrite** (`EditorUtility.SetDirty` over the affected assets, then `AssetDatabase.SaveAssets()`). Until an asset is re-saved, its file still carries the old key and the attribute is load-bearing.
+3. Commit the rewritten assets with their `.meta` files. Nothing here changes a GUID, so a `.meta` diff at this step means something else happened - investigate before merging.
+4. Keep the attribute for at least one release after every asset is rewritten. Removing it while any unrewritten asset, branch, or stash remains drops those values.
+
 ### Prefab variants, nested prefabs, and overrides
 
 A **nested prefab** is a prefab instance inside another prefab; it keeps its own link to its source. A **prefab variant** inherits from a base prefab and stores only its differences, so a base change propagates to every variant except where the variant overrode it.
@@ -145,10 +158,14 @@ Both callbacks can run on a background thread, so neither may touch the Unity AP
 
 ## Output Format
 
-When reviewing, emit one block per defect, highest severity first. Where one defect caused another (a `*.meta` ignore rule and the deleted `.meta` it dropped), emit the cause and name the consequence in its `Impact`.
+Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per defect. highest severity first. Where one defect caused another (a `*.meta` ignore rule and the deleted `.meta` it dropped), emit the cause and name the consequence in its `Impact`.
 
 ```
-### [Severity] {file:line | asset path and YAML key | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path and YAML key | symptom, when no source was supplied}
 
 - Category: {NotSerialized | NullNotPreserved | SerializeReferenceRisk | PrefabOverride | PrefabVariant | MetaFileGuid | MergeHazard | MissingScript | SerializationCallback | RepoHygiene}
 - Evidence: {source | inferred (state what was not seen)}
@@ -163,11 +180,11 @@ When reviewing, emit one block per defect, highest severity first. Where one def
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
-`Evidence: inferred` is required whenever the file or asset was not read, and caps the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Impact`. A diff summary naming a path is a source for the path and inferred for its contents; a diff hunk is a source for the lines it shows.
+`Evidence: inferred` is required whenever the file or asset was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces. A diff summary naming a path is a source for the path and inferred for its contents; a diff hunk is a source for the lines it shows.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |

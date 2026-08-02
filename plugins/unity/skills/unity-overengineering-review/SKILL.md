@@ -10,6 +10,8 @@ user-invocable: false
 # Unity Overengineering Review
 
 > Confirm any DI container the project already uses from `Packages/manifest.json` first. A container in place is context, not a finding - review what the diff adds against it, and never propose migrating off it.
+>
+> This skill owns **whether a layer earns its keep**. Where code should live and what the composition root looks like belongs to `unity-architecture-patterns`; callback timing and static lifetime to `unity-monobehaviour-lifecycle`; allocation and language mechanics to `csharp-unity-patterns`; measured cost to `unity-performance`.
 
 ## When to Use
 
@@ -23,7 +25,8 @@ user-invocable: false
   - **`[Recommend]`** (default). Name the constraint, recommend the edit. Escalate to **`[Must]`** when measurable cost is present; cite it in `Cost:`. Triggers: an abstraction that forces Play mode to test what was previously a plain-C# unit test; a pooling or caching layer whose bookkeeping exceeds the allocation it avoids; a branch presented as handling a case it can never reach
   - **`[Recommend]`** when justification is plausible but not visible in the diff - state the assumption and ask the author to confirm
 - An abstraction with **visible** justification - a second implementer, a test seam, a profiler measurement in the PR - is not a finding
-- **Scale is the discriminator.** Casual 2D games are small; patterns that pay for themselves in a 40-person project cost more than they return in a 2-scene puzzle game. Cite the project's actual size, not a general principle
+- **Scale is the discriminator, and scale is not genre.** Price an abstraction against the variation it absorbs: team size, shipped platforms, storefronts, locales, and runtime-selected variants. A casual 2D game on four platforms with a runtime consent split has a large distribution matrix and earns the layers that track it; a 2-scene puzzle game on one store does not. Cite the project's actual numbers, not a general principle
+- **This skill has a floor as well as a ceiling.** Where structure is absent rather than excessive - a God object, global mutable statics as the only channel between systems, no test seam on a live title - say so plainly and route it to `unity-architecture-patterns`. Never read "small project" as licence for no structure: a codebase where one feature costs edits in nine places has already paid more than the abstraction would have cost
 - Never propose deleting a layer the diff's own tests bind to
 - Performance abstractions need a measurement, not an argument. A pool, a cache, or a Job introduced without a profile is speculative regardless of how reasonable it sounds
 
@@ -130,7 +133,7 @@ _pool = new ObjectPool<GameOverPanel>(...);   // exactly one, alive for the sess
 
 Allocation avoidance in code that runs once per level load buys nothing and costs readability. The finding is optimization applied where frequency does not justify it - state the actual call frequency.
 
-### Category 4: Type-System and Dead Code Waste
+### Category 4: Type-System Waste
 
 #### Null check against a Unity object that cannot be null there
 
@@ -165,15 +168,25 @@ One block per finding; the consuming workflow merges them:
 ```
 ### [Must | Recommend] {file:line | asset path | symptom, when no source was supplied}
 
-- Category: {Engine Ceremony | Premature Architecture | Speculative Performance | Type-System Waste}
+- Category: {Engine Ceremony | Premature Architecture | Speculative Performance | Type-System Waste | Absent Structure}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
-- Unnecessary because: {what makes it dead or unread; comma-separate when stacked}
+- Unnecessary because: {what makes it dead or unread; comma-separate when stacked} -- OR, for Absent Structure -- Missing because: {what the absence costs}
 - Cost: {required for [Must]; omit otherwise}
-- Recommendation: {concrete C# or asset edit}
+- Recommendation: {concrete C# or asset edit; for Absent Structure, the extraction and its owning skill}
 - Justified when: {one-line note if a legitimate reason might apply; otherwise omit}
 ```
 
-For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran. Omit this line for categories that have at least one finding. If no source or diff was available to check, emit exactly `Necessity check not run: no source supplied.` instead of the per-category lines.
+`Absent Structure` is the floor rule's category. Its `Cost:` is the edit-site count or the regression count already being paid, and that count is what escalates the block to `[Must]`.
+
+An abstraction examined and found justified is written before the per-category lines, one per line, so the reader can tell a defended layer from an unexamined one:
+
+```
+Justified as-is: {abstraction} - {the visible justification: implementer count, the test double, the measurement}
+```
+
+This is the required form whenever the request questions an existing layer, since `No <category> findings.` alone reads as "nothing was checked" rather than "this was checked and it holds".
+
+For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran. Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the architecture is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. List those under a final `Deferred:` line naming the defect and the owning skill, so the workflow routes rather than drops them.
 

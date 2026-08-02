@@ -52,6 +52,8 @@ This client consumes API contracts rather than designing them: a finding that th
 - **+Perf:** allocation inside `Update`, `FixedUpdate`, `LateUpdate`, or a per-frame callback; a new `Instantiate`/`Destroy` on a repeating path; LINQ or string concatenation in a hot path; a new sprite, texture import setting, or material variant; a new transparent or overlapping 2D layer; a `Find`/`GetComponent` call in a per-frame path; a new scene load; a large collection held in memory
 - **2+ categories -> Full**
 
+Signals are matched syntactically, then checked for direction: a texture import change that lowers max size or adds compression, a `Destroy` removed in favour of a pool, or an allocation deleted from `Update` is the fix, not the defect. Log it as `signal: <category> -> <path> (improving - not escalated)` and do not escalate on it alone.
+
 There is no `+Ux` scope. Accessibility, aspect-ratio adaptivity, and localization are reviewed at baseline depth in Phase E, and designed in `task-unity-implement`; there is no dedicated UX lens to escalate to.
 
 ## Reviewable Surface
@@ -61,12 +63,12 @@ Unity projects mix source, generated output, and authored assets. The three are 
 | Surface | Treatment |
 | --- | --- |
 | `.cs` under `Assets/` (excluding `Assets/Plugins/`) | full review surface |
-| `.unity`, `.prefab`, `.asset`, `.inputactions`, `.uxml`, `.uss` | **review surface** - a scene wiring change, a prefab override, or a config asset edit is a legitimate finding, cited at the asset path |
-| `.meta` | not a finding surface on its own; a deleted or regenerated `.meta` that breaks references **is** a finding, cited at the affected asset |
+| `.unity`, `.prefab`, `.asset`, `.inputactions`, `.uxml`, `.uss`, `.spriteatlasv2`, `.controller`, and any other hand-authored asset under `Assets/` | **review surface** - a scene wiring change, a prefab override, an atlas membership change, or a config asset edit is a legitimate finding, cited at the asset path. An extension absent from this list is authored surface unless it is build output |
+| `.meta` | not a finding surface on its own. A deleted or regenerated `.meta` that breaks references **is** a finding, cited at the asset whose reference breaks - when that asset is itself the deleted one, cite the deletion and name the referencing asset even though it sits outside the change set. An import-setting delta in a `.meta` is reviewable, cited at the asset it describes |
 | `Library/`, `Temp/`, `obj/`, `Build/`, `Logs/`, generated `*.csproj` / `*.sln` | excluded - build output, never reviewed |
 | `Assets/Plugins/` and imported third-party SDK sources | excluded from style and structure findings; still in scope for security data-flow and version concerns |
 
-Unlike a code-generation stack, Unity's assets are hand-authored and carry real defects. A diff touching only `.meta` files or build output is a no-op for review purposes; say so rather than manufacturing findings.
+Unlike a code-generation stack, Unity's assets are hand-authored and carry real defects. A change set touching only build output is a no-op; say so rather than manufacturing findings. A `.meta`-only change set is **not** automatically a no-op - an import-setting delta (compression, max size, mip generation, atlas membership) is reviewable and is cited at the asset. GUID or importer-version churn with no setting delta is the no-op case.
 
 Asset diffs are YAML and often large and low-signal. Review what the change *means* (a reference rewired, a component removed, an override added), not the serialized line noise. When an asset diff is unreadable, say so and ask for the intent rather than guessing.
 
@@ -76,6 +78,8 @@ Asset diffs are YAML and often large and low-signal. Review what the change *mea
 |------|---------|
 | `/task-unity-review` | Review the working-tree change set (unstaged + staged + untracked) |
 | `/task-unity-review --staged` | Review the staged change set only |
+| `/task-unity-review core-only` | Suppress auto-escalation; run Core alone. Accepted bare or as `--core-only`, and combinable with `--staged` |
+| `/task-unity-review deep` | Force `deep` depth. Accepted bare or as `--deep` |
 
 When the tree is clean, `review-precondition-check` falls back to the last commit.
 
@@ -93,7 +97,9 @@ Read `ProjectSettings/ProjectVersion.txt`. If it is absent, stop - this workflow
 
 Record: engine version from `ProjectVersion.txt`, render pipeline, input system, UI system, persistence, and whether Addressables is present.
 
-**Engine floor.** The plugin targets Unity 6.3 LTS (`6000.3.x`) and newer. Compare numerically by component, not by string prefix. Below the floor, note in Summary: `Detected <version>; this plugin targets 6000.3.x and newer - version-specific guidance may not apply.` and review at reduced confidence rather than stopping; a review that refuses to run helps nobody mid-change. Above the floor (`6000.5.x`), proceed normally.
+**Engine floor.** The plugin targets Unity 6.3 LTS (`6000.3.x`) and newer. Compare numerically by component, not by string prefix. Below the floor, note in Summary: `Detected <version>; this plugin targets 6000.3.x and newer - version-specific guidance may not apply.` and review rather than stopping; a review that refuses to run helps nobody mid-change. This workflow alone continues below the floor - `task-unity-implement`, `task-unity-test`, and both lens workflows stop. A below-floor run therefore keeps scope at Core, and records `Scope incomplete: <scope> - below engine floor` only for a lens that *would otherwise have run*. A lens the user suppressed with `core-only` was declined, not lost: log its signals in Summary and write no `Scope incomplete` line. Above the floor (`6000.5.x`), proceed normally.
+
+Reduced confidence is concrete, not an adjective: findings resting on version-specific API surface are annotated inline with the version they assume, and no finding is downgraded on version grounds alone.
 
 **UI system.** If the diff's UI is uGUI, note once in Summary: `uGUI detected; UI Toolkit guidance does not apply.` Review uGUI changes for correctness and layering only - do not flag uGUI for not being UI Toolkit, and do not propose a migration.
 
@@ -109,6 +115,8 @@ Read the diff content once and reuse:
 - `git diff --name-status <base>` for the file list
 
 Restrict analysis to the handle's `reviewable` paths; binary and generated paths are excluded and never diffed.
+
+When a path in `reviewable` is excluded by the Reviewable Surface table, the table wins for *analysis* and the handle still supplies `files` for the frontmatter. Where the two numbers differ, write the handle's count and state the reviewed count once in Summary: `<N> reviewable; <M> reviewed - <what was excluded>`.
 
 **Skip entirely** when invoked as subagent and parent passed handle + pre-read diff.
 
@@ -131,7 +139,7 @@ Assess cross-cutting risk for the change set as a whole: what breaks if this is 
 
 Output the risk level before any findings.
 
-**Low-risk short-circuit:** if Risk is Low **and** the change does not touch architecture-relevant files (the rules assembly, any `.asmdef`, the bootstrap scene, a shared prefab, the save layer, the composition root, `ProjectSettings/`), skip Phases C-E. Escalated scopes still run (a Step 4 signal fired for a reason); their merged findings join High-Impact Findings. The streamlined report contains Summary, High-Impact Findings (Phase B + any subagent findings), and Next Steps only; Step 8 still writes the report.
+**Low-risk short-circuit:** if Risk is Low **and** the change does not touch architecture-relevant files (the rules assembly, any `.asmdef`, the bootstrap scene, a shared prefab, the save layer, the composition root, `ProjectSettings/`) **and** does not touch a localized string, string table, font asset, or asset identity (a deleted or regenerated `.meta`), skip Phases C-E. A prefab is shared when more than one scene or prefab references it. Resolve this by searching the project for its GUID rather than defaulting - the change set alone never shows it, and defaulting to shared would retire the short-circuit entirely. Where the search cannot run, say so and treat it as shared. Escalated scopes still run (a Step 4 signal fired for a reason); their merged findings join High-Impact Findings. The streamlined report contains Summary, High-Impact Findings (Phase B + any subagent findings), and Next Steps only; Step 8 still writes the report.
 
 ### Step 5 - Re-evaluate Depth After Phase A
 
@@ -145,6 +153,7 @@ Apply atomic skills; each owns canonical patterns:
 - Use skill: `unity-monobehaviour-lifecycle` - callback order, initialization traps, static state across Play sessions, coroutine lifetime
 - Use skill: `unity-architecture-patterns` - the engine-free rules boundary, injectability, global lookups
 - Use skill: `unity-serialization-prefabs` if the diff touches serialized fields, prefabs, scenes, or `.meta` files
+- Use skill: `unity-2d-rendering` if the diff touches sprites, atlases, materials, or sorting - Core owns their correctness (atlas membership, sorting, a broken material reference) whether or not `+perf` runs
 - Use skill: `unity-2d-gameplay-patterns` if the diff touches board, turn, or rule logic
 - Use skill: `unity-save-persistence` if the diff changes the save schema. Check installed-version impact directly: an installed older build must still work after this change - it must read what this one writes and vice versa, serialized data must stay deserializable, and its server contract expectations must still hold
 
@@ -159,6 +168,7 @@ Apply atomic skills; each owns canonical patterns:
 - **Secrets and grants.** No API keys, signing keys, or SDK secrets in source or committed config. No currency, reward, or entitlement granted by client code alone
 - **Untrusted input at the edges.** Deep-link parameters, remote-config values, and downloaded content are attacker-controllable and validated before use
 - **Save schema changes** ship a migration, and old builds stay installed - the change must be readable by whatever version the user has
+- **Build configuration.** Use skill: `unity-build-release` if the diff touches `ProjectSettings/`, an `.asmdef`'s platform set, or packaging. A scripting-backend switch or a raised managed-stripping level is a Core finding regardless of whether `+sec` runs: stripping removes reflection-reached types, so a reflection-based save DTO deserializes in the editor and returns a default profile in the release build. Name the serializer or require the release-build load test
 
 ### Phase C - Architecture Guardrails
 
@@ -172,7 +182,7 @@ Check layer violations and coupling: a dependency pointing the wrong way across 
 - **ScriptableObjects hold configuration, not runtime state.** Runtime mutation of a SO persists in the editor and diverges from a build
 - **Dependency injection at the seam,** not `GameObject.Find` / `FindObjectOfType` / static singletons reached from inside logic
 - **Scene and prefab ownership:** shared prefabs and the bootstrap scene are global surfaces; changes to them affect every consumer
-- **Anemic rules layer (deep depth only):** logic in presenters while the rules layer only holds data - flag for extraction. Do not raise on a single change alone
+- **Anemic rules layer:** logic in presenters while the rules layer only holds data. Raise it as a finding only when a second file in this change set, or a prior commit read at `deep`, shows the same shape; otherwise record it in `Architecture Notes` as a watch item. `deep` widens where the evidence may be looked for; it never substitutes for it
 
 **Multi-platform changes:** when a change affects a platform target, confirm the tier caveats were handled - WebGL has no threads by default and no durable `System.IO`; desktop changes input modality and window handling.
 
@@ -189,7 +199,7 @@ Check layer violations and coupling: a dependency pointing the wrong way across 
 
 ### Phase E - Maintainability
 
-Check that failure paths added by the change leave a log or error record behind rather than failing silently. Use skill: `unity-accessibility` for baseline touch-target, contrast, and non-colour-only signalling presence.
+Check that failure paths added by the change leave a log or error record behind rather than failing silently. Use skill: `unity-accessibility` for baseline touch-target, contrast, and non-colour-only signalling presence. Use skill: `unity-i18n` if the diff touches a user-facing string, a string table, or a font asset - a font swap on a localized label is a glyph-coverage change, and a locale whose glyphs are missing ships blank boxes.
 
 **Unity-specific:**
 
@@ -215,7 +225,7 @@ Skip if scope is **Core only**. For each selected scope, spawn one independent s
 **Subagent prompt contract:**
 
 - The `review-precondition-check` handle (`mode`, `base`, `current_branch`, `reviewable`, `counts`, `notes`) + the pre-read diff (no re-running git)
-- Depth level
+- Depth level - the parent's resolved depth, which overrides the lens's own depth table. A lens invoked at `deep` returns its deep-only section even where its own trigger did not fire
 - Pre-confirmed stack (Unity) + engine version, render pipeline, input system, UI system, persistence
 - The reviewable-surface table above
 - Return findings in own Output Format
@@ -292,6 +302,7 @@ The fence below delimits the template for display only - it is not part of the r
 **Persistence:** <store> | none
 **Scope:** Core | +Sec | +Perf | Full _(if auto-escalated: `auto-escalated from Core; signals: <list>`)_
 **Depth:** standard | deep _(if auto-promoted: `auto-promoted from standard; Risk: <level>`)_
+**Files:** `<N> reviewable` _(add `; <M> reviewed - <what was excluded>` only when the two differ)_
 
 ## High-Impact Findings
 
@@ -301,6 +312,7 @@ The fence below delimits the template for display only - it is not part of the r
 - Impact: [player-visible or operational]
 - System Risk: [why this is system-level]
 - Fix: [concrete C# or asset change]
+- Control type / Evidence: [carried verbatim from a lens subagent where it supplied one - `server authority | cost-raising only | accepted exposure (no server)`, `measured | estimated | inferred`; omit the line for Core findings]
 
 ### [Recommend] file:line
 - Issue, Impact, Fix
@@ -323,7 +335,7 @@ _Cross-cutting commentary. Reference findings by file:line._
 
 ## Next Steps
 
-Each item tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend.
+Each item tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend; within a band, order by fix dependency - the item another item's fix depends on goes first.
 
 1. **[Implement]** [Must] file:line - [one-line action]
 2. **[Implement]** [Recommend] BoardView.cs:88 - subscription never released
@@ -355,17 +367,17 @@ _Deep-only sections returned by lens subagents, preserved verbatim under their l
 
 - [ ] `behavioral-principles` loaded (or accepted from parent)
 - [ ] Stack confirmed; engine version, render pipeline, input, UI system, and persistence recorded
-- [ ] Engine version compared numerically against the `6000.3.x` floor; below-floor noted rather than silently assumed
+- [ ] Engine version compared numerically against the `6000.3.x` floor; below-floor noted, scope held at Core, and version-specific findings annotated inline
 - [ ] uGUI, where present, surfaced once rather than flagged as a defect
 - [ ] Step 3 - `review-precondition-check` ran (or handle received); `git diff <base>` read once and reused; analysis restricted to the handle's `reviewable` paths
-- [ ] Build output excluded from findings and signal scanning; authored assets treated as review surface
+- [ ] Build output excluded from findings and signal scanning; authored assets treated as review surface, including extensions absent from the table; reviewed count stated in Summary where it differs from the handle's `files`
 - [ ] Step 4 - scope auto-escalation evaluated; promotion (or `core-only`) recorded
 - [ ] Step 5 - depth auto-promoted to `deep` when Risk is High/Critical
 - [ ] Risk stated before any finding
 - [ ] Phase B: atomic skills applied; test coverage, destroyed-object access, await lifetime, engine-free boundary, UI states, secrets and grants, untrusted input, save migration checked
 - [ ] Phase C: rules boundary, assembly references, MonoBehaviour necessity, SO mutation, injection seams, shared-asset ownership
 - [ ] Phase D: complexity and over-engineering checked; `unity-overengineering-review` applied
-- [ ] Phase E: naming, magic numbers, localization, logging hygiene, asset hygiene, accessibility baseline
+- [ ] Phase E: naming, magic numbers, logging hygiene, asset hygiene, accessibility baseline; `unity-i18n` applied where a string, string table, or font asset changed
 - [ ] Missing tests raised as named finding (not buried)
 - [ ] Every Must cites system risk
 - [ ] Every finding has label + `file:line` + concrete fix

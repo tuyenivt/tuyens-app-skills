@@ -30,14 +30,14 @@ Security review for Unity projects.
 
 **Not for:** perf review (`task-unity-review-perf`), general review (`task-unity-review`), server-side auth or API security (the owning service's plugin).
 
-**Depth.** This workflow always runs full - security has cliff-edge consequences, and a shipped binary cannot be recalled. Scope by file, not by depth.
+**Depth.** This workflow always runs at `deep` - security has cliff-edge consequences, and a shipped binary cannot be recalled. Every step runs on every invocation; scope by file, not by depth. `deep` is the value written to the report's `depth` field.
 
 ## Severity Rubric
 
 | Severity | Definition |
 | -------- | ---------- |
 | **Critical** | Revenue or an entitlement granted on an unverified client claim (a rewarded-ad reward granted in the client's own ad-closed callback, an IAP item granted without server receipt validation); a live API key, signing key, or store credential compiled into the build or committed; a privacy control absent where it is legally required (no consent gate in the EU, personalized ads in a children's-audience game). Must fix before release; blocks merge. |
-| **High** | Tamperable state that affects monetization or other players - an editable save carrying purchased entitlements or leaderboard-bound currency; a deep-link or remote-config value driving a grant, unlock, or price with no validation; an SDK initialized before consent is resolved. Must fix before merge. |
+| **High** | Tamperable state that affects monetization or other players - an editable save carrying purchased entitlements or leaderboard-bound currency; a deep-link, remote-config, or server-response value driving a grant, unlock, or price with no validation; an SDK initialized before consent is resolved; **a runtime-issued credential in player-readable storage** (`PlayerPrefs`, a plain file) - per-device rather than global, which is what separates it from the Critical shipped-secret clause. Must fix before merge. |
 | **Medium** | Tamperable single-player state with no monetization or multiplayer reach; an SDK data-flow gap with consent correctly present; a save integrity check absent where the value is cosmetic. Should fix in this change or the next. |
 | **Low** | Cost-raising hardening with no current exploit path - obfuscation posture, an integrity check on non-valuable state, a defensive validation on an input that is already constrained. |
 
@@ -47,17 +47,29 @@ Security review for Unity projects.
 - Plaintext editable save (Medium alone) + entitlements stored in it (High) = **Critical**: remove-ads and unlocks are granted by editing a file
 - Remote config driving prices (High) + no range clamp on arrival (High) = **Critical**: a compromised or misconfigured config becomes an economy break with no client floor
 
-If either finding is exploitable alone, file separately at independent severities.
+The enumerated rows above are the rule; where one matches, merge at the elevated severity even though each half is also exploitable alone - that is what "compose" means. File separately instead when the two defects sit on **different paths**, or when one is merely the reach of the other (an exported activity is the reach of the handler it exposes, not a second defect). The rule is not economy-specific: a leaked credential plus a destructive endpoint composes the same way. Where one finding already carries the pair's full impact, say which finding owns it rather than filing the composition twice.
 
 ## No-Server Projects
 
-Many casual 2D games ship with no backend. When Step 2 finds no server, **say so once in the Summary** and reclassify every server-authority finding as **accepted exposure** with its reason, rather than emitting fixes the project cannot implement. In that mode the reviewable controls are tamper *detection* (a keyed hash over the save, with the limit stated: the key ships in the build and is extractable), input validation, secret absence, SDK data flow, and store compliance. Do not recommend server validation as an action item to a project with no server - name it as the boundary the exposure sits behind.
+Many casual 2D games ship with no backend. When Step 2 finds no server, **say so once in the Summary** and record every server-authority finding's server half as **accepted exposure** with its reason, rather than emitting fixes the project cannot implement. In that mode the reviewable controls are tamper *detection* (a keyed hash over the save, with the limit stated: the key ships in the build and is extractable), input validation, secret absence, SDK data flow, and store compliance. Do not recommend server validation as an action item to a project with no server - name it as the boundary the exposure sits behind.
+
+**Accepted exposure does not lower severity and does not delete the finding.** Severity states what is at risk; Control type states what can be done about it. A Critical finding whose server half is unimplementable stays Critical, and every client-side remainder it carries - deleting a grant with no precondition, restoring a removed integrity check, ordering a durable write before an acknowledgement - is still an action item and still appears in Next Steps. Only the server half produces no Next Step.
+
+**Server presence is not binary.** Record which of these applies, because it decides what "server authority" can mean:
+
+| Server | Meaning | Effect |
+| --- | --- | --- |
+| First-party | Team or company owns it | Server-authority findings are actionable; the owning team is named in the finding's Control type, and standalone runs also raise a `[Delegate]` Next Step |
+| Third-party BaaS | A backend exists but you cannot add validation to it (Firebase, PlayFab-as-configured) | The console or dashboard is the trust boundary; client-side clamping is the only implementable control. Write `cost-raising only`, and name access control on that console as the upstream fix |
+| None | Client-only game | The No-Server rule above |
 
 ## Excluded Surfaces
 
 Not review surface: `Library/`, `Temp/`, `obj/`, `Build/`, generated `*.csproj` and `*.sln`, and imported third-party SDK sources under `Assets/Plugins/`. **The SDK's own source is excluded; its integration, configuration, and initialization order are not** - an ads SDK initialized in `Awake` before the consent answer exists is a finding cited at the calling code. Do not raise a finding *on* a `.meta` file; cite the asset it describes.
 
 **Assets are review surface.** A ScriptableObject `.asset` holding an API key, a scene wiring a reward handler directly to a wallet, or a prefab carrying a debug cheat component is a legitimate finding cited at the asset path.
+
+**Test files are review surface for credentials only.** A real token, key, or endpoint credential in a test fixture is committed and therefore disclosed - it is a finding at its shipped-secret severity even though the test assembly never reaches the player build, and the remediation is rotation, not deletion. Raise nothing else against test code.
 
 ## Invocation
 
@@ -82,7 +94,9 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `ProjectSettings/ProjectVersion.txt`; if it is absent, stop - this workflow reviews Unity projects only.
 
-Record: engine version from `ProjectSettings/ProjectVersion.txt` (internal form), scripting backend (IL2CPP / Mono), **whether a server exists at all**, monetization surfaces present (IAP, rewarded ads, mediation), save store and format, third-party SDKs from `Packages/manifest.json` and `Assets/Plugins/`, deep-link and remote-config mechanisms, and platform targets.
+Record: engine version from `ProjectSettings/ProjectVersion.txt` (internal form), scripting backend (IL2CPP / Mono), **server presence and kind** (first-party / third-party BaaS / none), **the declared audience** (general 13+ / children under 13 / mixed), monetization surfaces present (IAP, rewarded ads, mediation), save store and format, third-party SDKs from `Packages/manifest.json` and `Assets/Plugins/`, deep-link and remote-config mechanisms, and platform targets.
+
+**Audience is recorded here because it decides severity at Step 9, not after it.** A children's-audience declaration makes personalized ads and identifier collection illegal rather than consent-gated, so a finding graded before the audience is known is graded wrong.
 
 **Engine floor is Unity 6.3 LTS (`6000.3.x`).** Compare numerically. Below the floor, state the mismatch and stop. If `ProjectVersion.txt` is unreadable, say so and proceed with version-independent findings only.
 
@@ -133,7 +147,7 @@ Cite real `file:line` or asset path. Open:
 | Currency / progress | Save-file edit, memory edit | 7 |
 | Leaderboard score | Forged submission | 6 |
 | API keys and secrets | Extraction from the binary | 7 |
-| Deep link / remote config / downloaded content | Crafted input driving a grant or navigation | 8 |
+| Untrusted external input | Crafted input driving a grant or navigation - deep link, remote config, downloaded content, or a server response | 8 |
 | SDK data collection | Collection before consent, or beyond the declaration | 9 |
 | Store privacy posture | ATT, GDPR, children's audience | 9 |
 
@@ -181,7 +195,9 @@ Everything crossing into the process from outside is attacker-controllable: deep
 - [ ] **A custom URL scheme is not an authentication channel** - any installed app can register the same scheme. Only verified app links and universal links carry an ownership claim
 - [ ] **Remote-config values driving currency, pricing, unlocks, or difficulty are validated and range-clamped on arrival.** A compromised or misconfigured config otherwise becomes an economy bug with no floor
 - [ ] **Downloaded content and remote catalogs are treated as untrusted** - served over TLS, size-bounded, and never used to select code paths by name
-- [ ] **Server responses are parsed defensively** and never trusted to be well-formed
+- [ ] **The transport is not a trust boundary.** Every endpoint is TLS and no cleartext exception is configured, but a user-installed CA on a device the player owns makes any response attacker-authored. Certificate pinning raises the cost of that and is `cost-raising only` - it never substitutes for validating the response
+- [ ] **Server responses are parsed defensively and validated field by field before they touch live state** - including a first-party server's. Ownership of the endpoint is not a trust boundary: the transport terminates on a device the player controls, so a proxy with a user-installed CA makes the response attacker-authored. A response driving progress, currency, or unlocks with no validation is High, the same as an unvalidated deep link
+- [ ] **Conflict resolution does not key on the device clock.** Last-write-wins on a client-supplied timestamp is a write primitive: the player sets the date forward and their save wins permanently. The server assigns the timestamp, or the client sends a monotonic counter the server compares
 - [ ] **Android components are exported only when they must be**; a new permission arriving through an SDK's manifest is justified or removed
 
 ```csharp
@@ -208,7 +224,7 @@ This step owns whether the collection is legal and whether the SDK respects the 
 
 ### Step 10 - Write Report
 
-Standalone only. Subagent runs return findings in the Output Format to the parent, which writes the single merged report.
+Standalone only. A subagent run returns the `## Asset Triage` table, the `## Findings` sections, and `## Reviewed, Not Filed` - nothing else. No frontmatter, no Summary block, no Recommendations, no Next Steps: the parent owns those and cannot merge two of them. Where the no-server or third-party-BaaS boundary applies, state it once inside the affected findings' Control type rather than in a Summary the subagent does not write.
 
 Write the assembled report to `review-security-<branch>.md` in the current working directory, overwriting the file if it already exists.
 
@@ -243,8 +259,9 @@ The fence below delimits the template for display only - it is not part of the r
 ## Unity Security Review Summary
 
 **Stack Detected:** Unity <marketing name> (<internal version>) / IL2CPP | Mono
-**Server:** present at <endpoint owner> | **none - client-only game**
-**Monetization:** IAP | rewarded ads | mediation | none in diff
+**Server:** first-party at <endpoint owner> | third-party BaaS (<vendor>) - no server-side validation available to this team | **none - client-only game**
+**Audience:** general (13+) | **children (under 13)** | mixed
+**Monetization:** IAP | rewarded ads | mediation | present but untouched in diff | none
 **Save Store:** <path and format> | integrity check at file:line | none
 **SDKs in Diff:** <list> | none
 **App Edges:** deep links | remote config | downloaded content | none in diff
@@ -275,12 +292,13 @@ Summary field whose observed state matches no listed value: write the closest va
 
 ### Critical
 
-- **Location:** [file:line or asset path]
+- **Location:** [file:line or asset path; a finding whose defects compose across several files lists each, marking the one where the fix starts]
 - **Issue:** [the defect in Unity terms: "`OnAdClosed` adds 500 coins directly, so any player who calls the handler or edits the callback grants themselves the reward without watching"]
 - **Attack:** [what an attacker does, concretely: "edits `coins` in `save.json` and relaunches", "invokes the reward handler through a modified build", "reads the key out of the ScriptableObject in the asset bundle"]
 - **Impact:** [who is harmed and how - revenue loss, economy break, other players' rankings, data exposure, store rejection]
+- **Regression of:** [the commit that added the control this diff removes, and what it was added to fix - written only when the diff removes a control; omit the line otherwise]
 - **Severity rationale:** [tier] per rubric - [which clause applies]
-- **Control type:** server authority | cost-raising only | accepted exposure (no server)
+- **Control type:** server authority | cost-raising only | accepted exposure (`<reason>` - no server, or a backend this team cannot add validation to) - where a finding's fixes span two, write both as `<primary> + <secondary>` and say which fix is which
 - **Fix:** [concrete C#, asset, or configuration change with code]
 
 ### High / Medium / Low
@@ -288,6 +306,10 @@ Summary field whose observed state matches no listed value: write the closest va
 [Same structure]
 
 _Omit severity sections with no findings. If all are omitted: "No security issues found."_
+
+## Reviewed, Not Filed
+
+One line per reviewable path that produced no finding, with why. A near-clean change set is the common case, and without this section the report cannot be distinguished from one where the file was never opened. Omit only when every reviewable path produced a finding.
 
 ## Recommendations
 
@@ -298,7 +320,7 @@ _Omit severity sections with no findings. If all are omitted: "No security issue
 Each tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend.
 Severity maps to intent: Critical / High -> [Must]; Medium / Low -> [Recommend].
 Every finding carries exactly one label: `[Must]` or `[Recommend]`. No other label is written.
-A finding whose **Control type** is `server authority` also produces a `[Delegate]` entry naming what the backend must enforce - the client fix alone does not close it. A finding whose Control type is `accepted exposure (no server)` produces no Next Step; it is recorded, not actioned.
+A finding also produces a `[Delegate]` entry whenever the control that closes it sits outside this codebase - `server authority` naming what the backend must enforce, or a third-party BaaS naming the console access control that is the upstream fix. The client fix alone does not close either. Where Control type is `accepted exposure`, the server half produces no Next Step, and every client-side remainder the finding names still produces one - a finding never leaves Next Steps empty-handed because its server half is unimplementable.
 
 1. **[Implement]** [Must] file:line - [one-line action]
 2. **[Delegate]** [Recommend] [scope: server contract] - [one-line action]
@@ -319,7 +341,7 @@ _Omit if no issues found._
 **Verifiable from the diff (must check):**
 
 - [ ] Step 1: `behavioral-principles` loaded (or accepted from parent)
-- [ ] Step 2: stack confirmed Unity; engine version checked numerically against the `6000.3.x` floor; scripting backend, **server presence**, monetization surfaces, save store, SDKs, edges, and platform targets recorded
+- [ ] Step 2: stack confirmed Unity; engine version checked numerically against the `6000.3.x` floor; scripting backend, **server presence and kind**, **declared audience**, monetization surfaces, save store, SDKs, edges, and platform targets recorded before any finding is graded
 - [ ] Step 3: `review-precondition-check` ran (or parent-supplied handle and diff reused); `git diff <base>` read once and reused; untracked files read directly as added lines; analysis restricted to the handle's `reviewable` paths; no-op exit taken on an excluded-only change set
 - [ ] Step 4: security surface read directly (grant paths, save call sites, SDK init order, edges, `ProjectSettings/`, platform overrides, CI, changed `.asset` files); prior revision consulted wherever a control was removed
 - [ ] Step 5: asset triage produced one verdict per row; triage verdicts not duplicated as standalone findings
@@ -330,7 +352,7 @@ _Omit if no issues found._
 - [ ] Step 10: standalone: report written to `review-security-<branch>.md` with the sanitized branch name and complete frontmatter (`branch`, `scope_mode`, `files`, `scope`, `depth`, `generated_at`); confirmation line printed; subagent: findings returned to parent, no file written
 - [ ] Excluded surfaces raised no findings; SDK *integration and init order* still reviewed; `.meta` defects cited at the asset; scenes, prefabs, and `.asset` files treated as reviewable
 - [ ] Severity rubric applied consistently; combined-finding rule applied where two defects compose on one path
-- [ ] Every finding carries a concrete attack, an impact, and a Control type
+- [ ] Every finding carries a concrete attack, an impact, and a Control type; a removed control also carries `Regression of:`
 - [ ] No-server rule honored: stated once in the Summary, server-authority findings reclassified as accepted exposure, no unimplementable action items
 - [ ] Next Steps tagged `[Implement]` / `[Delegate]`, ordered Must > Recommend (omitted only when no issues)
 

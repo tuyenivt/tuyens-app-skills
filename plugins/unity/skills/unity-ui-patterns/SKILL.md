@@ -45,7 +45,23 @@ public void SetScore(int v) => _score.text = v.ToString();
 
 Resolve in `OnEnable` and not `Awake`: `rootVisualElement` is not reliably populated until the document is enabled. Re-resolve after any `visualTreeAsset` swap, since the old references point at a discarded tree.
 
-For lists, `ListView` with `makeItem`/`bindItem` recycles elements. Building one element per row of a 500-question bank is both an allocation spike and a layout stall.
+For lists, `ListView` with `makeItem`/`bindItem` recycles elements. Building one element per row of a 500-question bank is both an allocation spike and a layout stall. Cache each row's own `Q` results once in `makeItem` (stash them on `userData`) rather than re-querying in `bindItem`, which runs on every scroll recycle.
+
+Set `virtualizationMethod` deliberately: `FixedHeight` is cheaper and correct only when every row is genuinely the same height; a row holding localized text is not, so variable content needs `DynamicHeight`. Guessing `FixedHeight` clips the first long translation.
+
+### Text that grows
+
+Labels change size with locale, and with the player's system font scale. A box authored around one English string clips the first German or Japanese one that arrives.
+
+```css
+/* Bad - fixed box, so a longer translation clips instead of growing */
+.stat-label { width: 220px; height: 44px; }
+
+/* Good - content drives the box, bounded rather than fixed */
+.stat-label { max-width: 320px; min-width: 0; white-space: normal; }
+```
+
+Three rules carry most of it: never set a fixed `width`/`height` on a text-bearing element, use `min-width`/`max-width` instead; put `min-width: 0` on flex text children so they can actually shrink and wrap rather than overflowing their row; and set `flex-shrink: 0` on the value side of a label/value pair so a long label never squeezes the number out. Raise the whole type ramp through one class on a root when the system font scale is large, so the screen scales coherently instead of one label outgrowing its row. Unity exposes no cross-platform system font scale - the value comes from the platform layer (Android `Configuration.fontScale`, iOS `preferredContentSizeCategory`) or from an in-game text-size setting, so treat it as supplied and default it to 1. Which strings need this, and their font assets and fallback chains, are `unity-i18n`.
 
 ### UXML structure and USS styling
 
@@ -100,7 +116,7 @@ root.style.paddingTop = Screen.height - sa.yMax;
 root.style.paddingBottom = sa.yMin;
 ```
 
-`Screen.safeArea` is in screen pixels; if the panel scales, convert before applying, or apply the padding to a root that the panel scales as a whole. Re-apply on orientation change and on desktop window resize - safe area is not constant for the process lifetime. Gesture bars at the bottom matter as much as the notch at the top: a Play button under the home indicator is unreachable.
+`Screen.safeArea` is in screen pixels; if the panel scales, convert before applying, or apply the padding to a root that the panel scales as a whole. Re-apply on orientation change and on desktop window resize - safe area is not constant for the process lifetime. `GeometryChangedEvent` on the root is what detects both; polling `Screen.orientation` from `Update` is the wrong shape. The same event drives the root class swap for a layout restructure. Gesture bars at the bottom matter as much as the notch at the top: a Play button under the home indicator is unreachable.
 
 ### Aspect-ratio adaptivity
 
@@ -147,10 +163,14 @@ Every transition needs a reduced-motion path - see `unity-accessibility`.
 
 ## Output Format
 
-When reviewing, emit one block per finding:
+Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
 
 ```
-### [Severity] {file:line | asset path | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path | symptom, when no source was supplied}
 
 - Category: {Structure | QueryCost | Scaling | Navigation | SafeArea | Adaptivity | Events | Transitions | OutOfScopeUI}
 - Evidence: {source | inferred (state what was not seen)}
@@ -163,11 +183,11 @@ When reviewing, emit one block per finding:
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
-`Evidence: inferred` is required whenever the source was not read, and caps the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Impact`.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |

@@ -36,6 +36,8 @@ Read `ProjectSettings/ProjectVersion.txt` and compare `m_EditorVersion` numerica
 
 Record from `Packages/manifest.json` and the project: Test Framework presence, substitution library (NSubstitute / hand-written fakes / none), whether Enter Play Mode Options is enabled and domain reload disabled, UI system, persistence store, and whether Addressables is in use.
 
+Any of these that cannot be read is recorded as `unknown` and carried forward as `unknown` in the deliverable - never silently defaulted. Where a recorded value gates later guidance, `unknown` takes the safe branch and says so: unknown domain reload is treated as disabled, so statics are reset in `[SetUp]` regardless.
+
 ### STEP 2 - READ CODE UNDER TEST AND EXISTING TESTS
 
 Ground output in project conventions, not generic templates.
@@ -47,6 +49,8 @@ Ground output in project conventions, not generic templates.
 - Check whether `Library/` is cached between CI runs
 
 If no existing tests: say so and propose conventions explicitly rather than inventing them silently.
+
+**When no engine-free assembly exists**, every target below P5 is blocked on creating one, and a whole-project re-layering is not the recommendation. Scope the extraction to the P1-P3 targets only (the save DTO and its migration chain, the rules the game is graded on, the monetized paths), leave the remaining scripts in `Assembly-CSharp`, and say which files move. State the rejected alternative - testing those rules in PlayMode where they currently sit - and why it loses: a domain reload and scene load per run, forever, and ambient time or randomness still cannot be injected. Write the extraction as the first entry in `Gaps to close`, not as a precondition that stops the deliverable.
 
 ### STEP 3 - THE UNITY 2D TEST PYRAMID
 
@@ -76,6 +80,8 @@ Determinism cases worth having explicitly: same seed produces the same board, re
 **The rules layer needs no mocking framework.** Its dependencies are interfaces the test implements directly - a `FakeClock` advancing on command, a `SeededRandom` with a fixed seed, an in-memory save store. Hand-written fakes are clearer in the assertion and cheaper than a mock configuration.
 
 NSubstitute is for the seams where a hand-written fake is more work than the test: a third-party SDK interface, an analytics sink, a remote-config source, or asserting that a call happened at all.
+
+**NSubstitute's presence in the manifest is not a reason to use it.** The test is cost, not category: reach for it only when the fake would be longer than the substitute configuration. A seam the test can implement in a handful of lines - clock, RNG, in-memory save store - is hand-written even when the seam would also qualify by category, and even when the assertion is that a call happened.
 
 ```csharp
 // Bad - a mock configured over three lines to return a value a fake returns in one
@@ -134,7 +140,7 @@ Unity -batchmode -nographics -runTests \
 
 ### STEP 9 - FLAKE CONTROL
 
-Four causes account for nearly all Unity test flake. Diagnose to one before touching the test:
+Four causes account for nearly all Unity test flake. Diagnose to a named cause before touching the test:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
@@ -144,6 +150,15 @@ Four causes account for nearly all Unity test flake. Diagnose to one before touc
 | Fails only in a device or release run | **Stripping or backend divergence** - reflection-dependent code the linker removed | Reproduce on a release build; preserve the type (`unity-build-release`) |
 
 Retrying a flaky test hides one of these four. Quarantine with an issue and a named cause, never with a bare retry.
+
+**One symptom set commonly has several of these at once** - differing failure values across runs are the fingerprint of two causes, not one. Diagnose each independently, report every cause that fires, and order the fixes so the cheapest one that unblocks the others goes first.
+
+Two causes sit outside the four rows:
+
+- **Global engine state left non-default by a prior test** - `Time.timeScale` at 0 from an unclosed pause popup, a changed fixed timestep, a loaded additive scene. It behaves like row 1 but the state is the engine's, not the project's: reset it in `[SetUp]` and fix the test that left it. `WaitForSeconds` never completes at `timeScale = 0`, so this reads as a hang rather than a failure.
+- **Harness false-green** - the suite reports success when it did not run: a `-quit` that truncates before results are written, exit-code gating, or a job whose `-testPlatform` does not include the failing test. Diagnose against STEP 8. When the reported symptom is a false pass rather than a failure, this is the cause.
+
+Where one fix closes two causes, report both causes and state the shared fix once.
 
 ### STEP 10 - COVERAGE TARGETS
 
@@ -178,10 +193,13 @@ Measure rather than guess: run the project's coverage tooling scoped to the rule
 
 - "What tests are missing?" -> Coverage Assessment
 - "Write tests for X" / "scaffold" -> Test Scaffolds
-- "Why does this test fail in CI / only in a suite?" -> the STEP 9 diagnosis: named cause + evidence + fix; no strategy doc
-- "Test strategy" / "test plan", OR low coverage with no scaffolds requested -> Strategy Doc (optionally with Coverage Assessment)
-- 2+ deliverables -> in this order separated by `---`: Coverage Assessment -> Strategy Doc -> Test Scaffolds
+- "Why does this test fail in CI / only in a suite?" -> Flake Diagnosis
+- "Test strategy" / "test plan" -> Strategy Doc
 - Unclear -> default to Strategy Doc
+
+More than one rule matching is the normal case, not a conflict: produce every deliverable that matched, in this order, separated by `---`: Coverage Assessment -> Flake Diagnosis -> Strategy Doc -> Test Scaffolds. A coverage question against a project with no engine-free assembly always matches both Coverage Assessment and Strategy Doc, because the extraction plan is the answer and only the Strategy Doc holds it.
+
+Where two deliverables share a field, the earlier one states it and the later one references it rather than restating - the prioritized list appears once, in `Gaps to close`.
 
 Every deliverable opens with the engine gate line:
 
@@ -196,6 +214,7 @@ Every deliverable opens with the engine gate line:
 
 **Engine:** {version} | Floor 6000.3.x | {result}
 **Engine-free rules assembly:** {name, or "none - no fast layer exists"}
+**Lead finding:** {the one sentence that gates the plan - when no fast layer exists, that it must be extracted and which files move; otherwise the largest untested surface}
 **Substitution:** NSubstitute | hand-written fakes | none
 **Domain reload:** disabled | enabled | unknown
 **Coverage gaps:**
@@ -206,7 +225,8 @@ Every deliverable opens with the engine gate line:
 - **Determinism:** [logic reading ambient time or randomness, so it cannot be tested]
 - **Assembly structure:** [test asmdefs referencing more than they need; missing test-assembly flag]
 
-**Recommended balance:** EditMode rules [target - the bulk] / EditMode data [target] / PlayMode [target - keep small]
+**Recommended balance:** EditMode rules [target - the bulk] / EditMode data [target] / PlayMode [target - keep small] _(targets for the suite to reach, never a measurement of it)_
+**Measured coverage:** {tool, scope, and figure | "not measured - <reason>"; an estimate from test-file density is labelled an estimate}
 **Coverage targets:** rules [high] / migration [high] / MonoBehaviour glue [low by design]
 
 **Prioritization** _(include when coverage is low or gaps exceed 5)_:
@@ -218,6 +238,28 @@ Every deliverable opens with the engine gate line:
 5. **P5 - Presentation glue:** [screen wiring, presenters]
 ```
 
+**Flake Diagnosis:**
+
+```markdown
+## Flake Diagnosis: {test name}
+
+**Engine:** {version} | Floor 6000.3.x | {result}
+**Causes found:** {n}
+
+### Cause {n} - {name from the STEP 9 table, or one of its two out-of-table causes}
+
+- **Evidence:** [the symptom detail that identifies this cause - a differing failure value, a static that survives, the exact CI flag]
+- **Fix:** [the change, in code or CI configuration]
+
+### Order to apply
+
+1. [cheapest fix that unblocks the others first; say what each unblocks]
+
+**Verification:** [how to prove the flake is gone - repeat count, shuffled order, the CI run that must now fail on a broken test]
+```
+
+No strategy doc, no coverage assessment, no pyramid. Every cause found gets its own section.
+
 **Test Scaffolds:** ready-to-run files using project conventions:
 
 - Right layer for the behaviour - EditMode unless engine behaviour is genuinely under test
@@ -227,7 +269,16 @@ Every deliverable opens with the engine gate line:
 - Fixed seeds and a fake clock; no ambient time or randomness
 - Failure paths alongside the happy path - illegal move, corrupt save, cascade at its bound, clock moved backwards
 - Bounded waits in `[UnityTest]`, with teardown for every instantiated object and additive scene
-- **Verified before delivery:** run the EditMode suite in batch mode and read the `-testResults` XML. If the environment cannot run it (no editor, no licence), say which subset was not run rather than implying a clean pass. Never deliver a scaffold that does not compile.
+- **Migration fixtures come from real shipped saves** - one captured file per shipped version, kept under the test assembly. A hand-written payload encodes the shape the team *believes* shipped, which is the same assumption the migration already makes, so it cannot catch a mismatch. Obtain one by running a build of the old tag once, pulling a QA device's profile from `persistentDataPath`, or taking a support-ticket attachment; capture the current version's file at each release tag so the next migration is never in this position. Where none can be obtained, mark the synthetic fixture an unverified shape and make a missing fixture **skip loudly rather than pass** - a green suite over absent fixtures is what ships the data loss
+
+Every scaffold deliverable ends with this block:
+
+```markdown
+**Verification:** {ran - N passed, read from <results path> | not run - <reason>}
+{when not run: what is therefore unverified - compilation, the assertions, and the project symbols the scaffold assumes exist}
+```
+
+Run the EditMode suite in batch mode and read the `-testResults` XML wherever an editor exists; that is the only way `ran` may be written. Where none exists, `not run - <reason>` is the complete and correct value and the scaffold ships with it, labelled a scaffold rather than a passing suite. Delivering with an unrun block filled in is the defect; delivering with `not run` is not.
 
 **Strategy Doc:**
 
@@ -255,8 +306,8 @@ Every deliverable opens with the engine gate line:
 
 - [ ] `behavioral-principles` loaded before the workflow ran
 - [ ] Engine version compared numerically to `6000.3.x`; below-floor stopped rather than degraded
-- [ ] Substitution library, domain-reload setting, and project surfaces recorded
-- [ ] `.asmdef` layout read; presence or absence of an engine-free rules assembly stated
+- [ ] Substitution library, domain-reload setting, and project surfaces recorded; anything unreadable carried as `unknown` on its safe branch
+- [ ] `.asmdef` layout read; presence or absence of an engine-free rules assembly stated, and where absent, the extraction scoped to the P1-P3 targets
 - [ ] Code under test, existing tests, and CI configuration read directly
 
 **Strategy / Coverage:**
@@ -267,7 +318,7 @@ Every deliverable opens with the engine gate line:
 - [ ] PlayMode and async conventions covered: bounded waits, timeouts, teardown
 - [ ] Test asmdef plan stated, with the EditMode assembly referencing the rules assembly only and the test-assembly flag set
 - [ ] CI invocations given per platform, with licence handling, `Library/` caching, and results read from the XML rather than the exit code
-- [ ] Flake causes diagnosed to one of the four classes rather than retried
+- [ ] Every flake cause present diagnosed and reported, not just the first; harness false-green diagnosed against STEP 8 where the symptom is a false pass
 - [ ] Coverage targets split by layer, with the low glue target said explicitly
 - [ ] Risk-based prioritization when coverage is low (P1 integrity, P2 rules, P3 monetized, P4 churn, P5 glue)
 
@@ -280,7 +331,7 @@ Every deliverable opens with the engine gate line:
 - [ ] Failure paths covered alongside the happy path
 - [ ] Statics reset in setup where domain reload is disabled
 - [ ] `[UnityTest]` waits bounded; instantiated objects and additive scenes torn down
-- [ ] Scaffolds compiled and run before delivery; any subset not run is named
+- [ ] Verification block present and honest - `ran` only where a suite actually ran, `not run - <reason>` plus the unverified list otherwise
 
 ## Avoid
 
@@ -303,4 +354,4 @@ Every deliverable opens with the engine gate line:
 - A CI job with no `Library/` cache and no licence return on the failure path
 - Chasing a coverage number on MonoBehaviour glue
 - Reporting one global coverage target with no per-layer split
-- Delivering scaffolds that were never compiled or run
+- Presenting a scaffold as verified when no suite ran, or leaving the Verification block off

@@ -23,7 +23,8 @@ user-invocable: false
 - **Grid and board games do not use physics for board logic.** 2048, Sudoku, Chess, and Match-3 resolve on array indices in the rules layer. Colliders as cell detectors, rigidbodies as falling tiles, and trigger overlaps as match detection are correctness bugs, not just cost
 - Physics runs on the fixed timestep. Read and write rigidbody state in `FixedUpdate`; read input and set visuals in `Update`
 - Body type is a decision, not a default. Static never moves, Kinematic moves under code control, Dynamic moves under forces. A moved Static collider forces a broadphase rebuild
-- Never write `transform.position` on a body with a collider. Use `Rigidbody2D.MovePosition` for Kinematic and forces or `linearVelocity` for Dynamic
+- Never write `transform.position` on a body with a collider. Use `Rigidbody2D.MovePosition` for Kinematic and forces or `linearVelocity` for Dynamic. `Rigidbody2D.velocity` is the pre-Unity-6 spelling and is superseded by `linearVelocity` - flag it on sight in a 6.3 project
+- A body fast enough to cross a collider within one step needs `CollisionDetectionMode2D.Continuous` on that body
 - Every query passes an explicit `LayerMask`. An unmasked `Raycast2D` tests every collider in the scene and hits things the caller never meant to
 - The Physics 2D collision matrix is part of the design. Turn off every layer pair that should never interact before optimising anything else
 - Input is read inside the action callback or from the action's current value in the same frame; input state is not cached across frames or read from a background thread
@@ -87,7 +88,11 @@ Set `Rigidbody2D.gravityScale = 0` for top-down games rather than zeroing projec
 
 ### Fixed timestep and interpolation
 
-Fixed Timestep (Project Settings > Time) defaults to 0.02s (50Hz). For mobile casual 2D, a slower step (0.0333s, 30Hz) halves physics cost where precision allows; a faster step is warranted only for fast small projectiles that tunnel.
+Fixed Timestep (Project Settings > Time) defaults to 0.02s (50Hz). For mobile casual 2D, a slower step (0.0333s, 30Hz) halves physics cost where precision allows.
+
+**Tunnelling is a per-body setting, not a timestep problem.** A fast body passing through a collider is fixed with `Rigidbody2D.collisionDetectionMode = CollisionDetectionMode2D.Continuous`, which sweeps that one body between steps. Raising the global step rate to fix it multiplies physics cost for every body in the scene, and on a device already dropping frames it makes the tunnelling worse, not better - the frame that stretches is the frame the body crosses the wall in. Set Continuous on the handful of bodies that need it (the ball, the bullet) and leave the rest Discrete.
+
+The related containment lever is `Time.maximumDeltaTime` (default 0.333s), which bounds how many catch-up steps one long frame may run. Lowering it toward ~0.1s makes a catastrophic frame degrade into visible slow motion rather than a large unsimulated jump.
 
 ```csharp
 // Bad - reads a tap in FixedUpdate, so an input between steps is missed entirely
@@ -193,12 +198,16 @@ Interactive rebinding (`PerformInteractiveRebinding`) is only needed where the t
 
 ## Output Format
 
-When reviewing, emit one block per finding:
+Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
+
+**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
 
 ```
-### [Severity] {file:line | asset path | symptom, when no source was supplied}
+### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path | symptom, when no source was supplied}
 
-- Category: {PhysicsMisuse | BodyType | TimestepCoupling | QueryMask | CollisionMatrix | ColliderCost | ActionMap | GestureThreshold | InputTiming | LegacyInput}
+- Category: {PhysicsMisuse | BodyType | CollisionDetection | TimestepCoupling | QueryMask | CollisionMatrix | ColliderCost | ActionMap | GestureThreshold | InputTiming | LegacyInput}
 - Evidence: {source | inferred (state what was not seen)}
 - Code: {one-line citation - code, component setting, or project setting; or `not supplied` when the finding is inferred}
 - Impact: {what breaks - "board state diverges across devices", "tap dropped on slow frames"}
@@ -209,11 +218,11 @@ When reviewing, emit one block per finding:
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
-`Evidence: inferred` is required whenever the source was not read, and caps the block at High - write the capped severity in the header, not the uncapped one, and name the uncapped band in `Impact`.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
-Close with exactly one status line, after any `Deferred:` lines:
+In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 | Condition | Line |
 | --- | --- |
