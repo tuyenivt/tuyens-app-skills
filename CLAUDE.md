@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Overview
 
-A **Claude Code plugin marketplace repository** for mobile client development - agent skills and agents for Claude Code and Codex. Contains only Markdown skill definitions (`.md`); no application code, no build scripts, no test runners.
+A **Claude Code plugin marketplace repository** for client application development - agent skills and agents for Claude Code and Codex. Contains only Markdown skill definitions (`.md`); no application code, no build scripts, no test runners.
 
 ## Repository Structure
 

@@ -1,6 +1,6 @@
-# Tuyen's Mobile Skills
+# Tuyen's App Skills
 
-Single marketplace repository for Claude Code mobile client plugins: `flutter` and `unity`. Each is fully standalone - install exactly the one your project needs.
+Single marketplace repository for Claude Code client application plugins: `flutter` and `unity`. Each is fully standalone - install exactly the one your project needs.
 
 ## Recommended: Project-Scoped Installation
 
@@ -13,7 +13,7 @@ The right pattern: **one marketplace add per machine, then per-project plugin in
 ### Step 1 - Add the marketplace once (user scope, done once per machine)
 
 ```bash
-claude plugin marketplace add tuyenivt/tuyens-mobile-skills
+claude plugin marketplace add tuyenivt/tuyens-app-skills
 ```
 
 ### Step 2 - Install the relevant plugin inside each project (project scope)
@@ -23,13 +23,13 @@ Run these commands from your project root. Claude Code stores the selection in t
 **Flutter / Dart project:**
 
 ```bash
-claude plugin install flutter@tuyens-mobile-skills --scope project
+claude plugin install flutter@tuyens-app-skills --scope project
 ```
 
 **Unity 2D game project:**
 
 ```bash
-claude plugin install unity@tuyens-mobile-skills --scope project
+claude plugin install unity@tuyens-app-skills --scope project
 ```
 
 > Each plugin is self-contained and has no dependencies. Install exactly one per project - `flutter` and `unity` are never installed together.

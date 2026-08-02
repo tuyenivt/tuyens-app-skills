@@ -1,6 +1,6 @@
 {
-  "name": "tuyens-mobile-skills",
-  "description": "Marketplace for Tuyen's mobile client agent skills: flutter and unity.",
+  "name": "tuyens-app-skills",
+  "description": "Marketplace for Tuyen's client application agent skills: flutter and unity.",
   "owner": {
     "name": "Tuyen",
     "contact": "github.com/tuyenivt"
