@@ -272,6 +272,8 @@ The fence below delimits the template for display only - it is not part of the r
 
 [When **Server: none**, one sentence here: "This project has no server, so no client-side control can make a grant authoritative. Server-authority findings below are recorded as accepted exposure, not as action items."]
 
+Summary field whose observed state matches no listed value: write the closest value followed by ` - <what was actually observed>` rather than forcing a wrong one or omitting the line. Every field is always present.
+
 ## Asset Triage
 
 | Asset                      | Verdict                 |
@@ -284,9 +286,6 @@ The fence below delimits the template for display only - it is not part of the r
 | Untrusted external input   | ...                     |
 | SDK data collection        | ...                     |
 | Store privacy posture      | ...                     |
-
-
-Summary field whose observed state matches no listed value: write the closest value followed by ` - <what was actually observed>` rather than forcing a wrong one or omitting the line. Every field is always present.
 
 ## Findings
 

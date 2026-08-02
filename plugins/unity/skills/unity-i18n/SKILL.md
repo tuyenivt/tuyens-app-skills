@@ -183,7 +183,7 @@ Severity that does not fit a listed band: assign the nearest lower band and stat
 
 `Evidence: inferred` is required whenever the source was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces.
 
-A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
+A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. In authoring mode the same line routes a design decision the sibling owns (`Deferred: font atlas memory budget -> unity-performance`). Omit entirely when there are none.
 
 If the project ships a single locale and has no localization package installed, emit exactly `Single-locale project - i18n review limited to hardcoded-string and formatting findings.` before any findings, and report only those two categories. This is a scope header, not a status line - a status line still closes the report.
 

@@ -243,6 +243,7 @@ Merge subagent findings into single Output Format. Do not append raw reports.
 - Note missing scopes as `Scope incomplete: <scope>`
 - Merge Next Steps with `[Implement]` / `[Delegate]` tags; re-sort by intent
 - Preserve deep-only sections returned by subagents as their own section after Next Steps - they are not findings; the merge must not drop them
+- Lens non-finding returns have fixed homes: +Perf's `## Unattributed` becomes the Summary's `**Unattributed:**` line; +Sec's `## Asset Triage` and `## Reviewed, Not Filed` are preserved verbatim under `## Lens Detail` at any depth
 
 **Lens seams.** One defect can legitimately surface in two lenses: a save re-serialized every frame is both security (an unverified write is a tamper surface) and perf (the allocation and I/O cost). Keep the integrity finding under +Sec and the frame-cost finding under +Perf, deduped to one line at the strongest intent. A hardcoded user-facing string is a Phase E maintainability finding, not +Sec, unless the string is itself a secret.
 
@@ -303,6 +304,7 @@ The fence below delimits the template for display only - it is not part of the r
 **Scope:** Core | +Sec | +Perf | Full _(if auto-escalated: `auto-escalated from Core; signals: <list>`)_
 **Depth:** standard | deep _(if auto-promoted: `auto-promoted from standard; Risk: <level>`)_
 **Files:** `<N> reviewable` _(add `; <M> reviewed - <what was excluded>` only when the two differ)_
+**Unattributed:** <carried from the +Perf lens's `## Unattributed`> _(omit when no lens returned one)_
 
 ## High-Impact Findings
 
@@ -343,9 +345,9 @@ Each item tagged `[Implement]` or `[Delegate]`. Order: Must > Recommend; within 
 
 _Omit if no actionable findings._
 
-## Lens Detail _(deep depth only; omit at standard, and omit when no subagent returned one)_
+## Lens Detail _(omit when no subagent returned a non-finding section)_
 
-_Deep-only sections returned by lens subagents, preserved verbatim under their lens name. These are analysis, not findings - do not merge them into High-Impact Findings and do not drop them._
+_Non-finding sections returned by lens subagents - deep-only analysis, +Sec's `Asset Triage` and `Reviewed, Not Filed` - preserved verbatim under their lens name. These are analysis, not findings - do not merge them into High-Impact Findings and do not drop them._
 
 ### <Lens> - <section title as returned>
 [the subagent's section, unmodified]
@@ -384,7 +386,7 @@ _Deep-only sections returned by lens subagents, preserved verbatim under their l
 - [ ] Step 6 - extra scopes ran in parallel with the pre-resolved handle, pre-read diff, and detected project shape
 - [ ] Step 7 - subagent findings merged into one intent-ordered list; no raw reports appended
 - [ ] Lens seams (sec/perf, perf/rendering overlap) deduped to one line at strongest intent; unlisted seams resolved by the fallback rather than dropped
-- [ ] Deep-only sections returned by subagents preserved under `## Lens Detail`, not merged into findings and not dropped
+- [ ] Lens non-finding returns routed to their fixed homes: deep-only sections, `Asset Triage`, and `Reviewed, Not Filed` under `## Lens Detail`; `Unattributed` folded into Summary - none merged into findings, none dropped
 - [ ] Failed / missing subagent scope noted as `Scope incomplete: <scope>`
 - [ ] Next Steps produced with `[Implement]` / `[Delegate]` tags, ordered by intent
 - [ ] Step 8 - report written to `review-<branch>.md` with the sanitized branch name and complete frontmatter (`branch`, `scope_mode`, `files`, `scope`, `depth`, `generated_at`); confirmation line printed

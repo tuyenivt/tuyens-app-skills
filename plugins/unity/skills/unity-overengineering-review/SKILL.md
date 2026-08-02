@@ -188,7 +188,7 @@ This is the required form whenever the request questions an existing layer, sinc
 
 For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran. Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the architecture is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
 
-A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. List those under a final `Deferred:` line naming the defect and the owning skill, so the workflow routes rather than drops them.
+A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those at the end, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
 ## Avoid
 

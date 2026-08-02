@@ -203,6 +203,11 @@ Detected: {m_EditorVersion} | Floor: 6000.3.x | Result: {Above floor | Below flo
 - Schema version: {old, or `none - unversioned legacy store`} -> {new}
 - Migration: {step, or "none - no save-shape change"}
 - Offline queue: {where it lives, its drain trigger, and the key that makes a replayed entry idempotent | `n/a - nothing queued`}
+- Store: {the store this feature's data goes into - the existing one, or a new one with the reason; where STEP 1 detected PlayerPrefs as the primary store, the standing condition and its severity | `n/a - nothing persisted`}
+
+## Content Impact
+- Banks: {banks touched, with identifier stability and import-time validation | `none - no content bank touched`}
+- Loading: {strategy sized to the bank; where content ships via `Resources/`, the standing condition and whether this feature adds to it | `n/a`}
 
 ## Deviations
 [each place the build departs from this skill's rules, with the reason - a MonoBehaviour holding rule state, a mutated ScriptableObject, strings not behind a localization key, a DI container. Written as `none` when there are none, never omitted]

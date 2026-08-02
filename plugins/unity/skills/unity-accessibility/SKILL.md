@@ -145,7 +145,7 @@ Never gate progression or story on reaction speed in a casual puzzle game unless
 
 Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
 
-**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
+**Authoring mode** - the request is to write or design something, including deciding what accessibility can be claimed for a store listing. Emit the code, design, or claim recommendation, then any `Deferred:` lines. No finding blocks, no severity, no status line: nothing was reviewed, so a not-run line would misdescribe the work.
 
 **Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
 
@@ -168,7 +168,7 @@ Severity that does not fit a listed band: assign the nearest lower band and stat
 
 Screen-reader findings state the Unity version and the platform the behaviour was verified against; where it was not verified on device, write `Verified: not tested` in `Impact` rather than asserting the behaviour.
 
-A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
+A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. In authoring mode the same line routes a design decision the sibling owns (`Deferred: settings persistence -> unity-save-persistence`). Omit entirely when there are none.
 
 In review mode, close with exactly one status line, after any `Deferred:` lines:
 

@@ -167,7 +167,7 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 ```
 ### [Severity] {file:line | symbol or type.member, when source was supplied without paths | asset path and YAML key | symptom, when no source was supplied}
 
-- Category: {NotSerialized | NullNotPreserved | SerializeReferenceRisk | PrefabOverride | PrefabVariant | MetaFileGuid | MergeHazard | MissingScript | SerializationCallback | RepoHygiene}
+- Category: {NotSerialized | NullNotPreserved | SerializeReferenceRisk | FieldRename | PrefabOverride | PrefabVariant | MetaFileGuid | MergeHazard | MissingScript | SerializationCallback | RepoHygiene}
 - Evidence: {source | inferred (state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Impact: {what is lost - "value reverts on reload", "every reference to this asset breaks for other clones"}
@@ -176,13 +176,13 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 `RepoHygiene` covers `.gitignore` and commit-pairing defects that put asset identity at risk without being a specific asset's defect.
 
-`Severity: {Critical | High | Medium | Low}` - Critical = a `.meta` deleted or GUID-changed for a referenced asset, a hand-merged scene or prefab, or `.meta` files gitignored. High = a field that does not serialize where the surrounding code reads or writes it as if it does, a `[SerializeReference]` type renamed without a persistence attribute, or a prefab override that contradicts the prefab's intent. Medium = a missing script with recoverable data, or `ISerializationCallbackReceiver` touching the Unity API. Low = a serialization nit with no data loss.
+`Severity: {Critical | High | Medium | Low}` - Critical = a `.meta` deleted or GUID-changed for a referenced asset, a hand-merged scene or prefab, or `.meta` files gitignored. High = a field that does not serialize where the surrounding code reads or writes it as if it does, a serialized field or `[SerializeReference]` type renamed without its persistence attribute, or a prefab override that contradicts the prefab's intent. Medium = a missing script with recoverable data, or `ISerializationCallbackReceiver` touching the Unity API. Low = a serialization nit with no data loss.
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`; where it fits none, pick the closest and name the real concern in `Impact`.
 
 `Evidence: inferred` is required whenever the file or asset was not read. It bounds the header at High: a Critical-band defect is written High, and `Impact` names the uncapped band. It never raises a block - a Medium defect stays Medium. Among blocks sharing a band, order by what the reader must fix first: root cause before the symptoms it produces. A diff summary naming a path is a source for the path and inferred for its contents; a diff hunk is a source for the lines it shows.
 
-A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
+A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those after the findings, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. In authoring mode the same line routes a design decision the sibling owns (`Deferred: where the effect logic lives -> unity-architecture-patterns`). Omit entirely when there are none.
 
 In review mode, close with exactly one status line, after any `Deferred:` lines:
 

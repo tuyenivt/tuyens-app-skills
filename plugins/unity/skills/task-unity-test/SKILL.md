@@ -199,7 +199,7 @@ Measure rather than guess: run the project's coverage tooling scoped to the rule
 
 More than one rule matching is the normal case, not a conflict: produce every deliverable that matched, in this order, separated by `---`: Coverage Assessment -> Flake Diagnosis -> Strategy Doc -> Test Scaffolds. A coverage question against a project with no engine-free assembly always matches both Coverage Assessment and Strategy Doc, because the extraction plan is the answer and only the Strategy Doc holds it.
 
-Where two deliverables share a field, the earlier one states it and the later one references it rather than restating - the prioritized list appears once, in `Gaps to close`.
+Where two deliverables share a field, state it once in the deliverable that owns it and reference it from the other rather than restating. The prioritized list is owned by the Strategy Doc's `Gaps to close`: a Coverage Assessment emitted alongside a Strategy Doc replaces its `Prioritization` section with a one-line pointer to `Gaps to close`.
 
 Every deliverable opens with the engine gate line:
 

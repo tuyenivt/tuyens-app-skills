@@ -26,7 +26,7 @@ This skill **gates only**: it emits the change set and how it was derived, not t
 
 ## Scope Modes
 
-Resolved in order; the first that yields a non-empty change set wins.
+`--staged` pins the mode to `staged-only` and never falls back. Otherwise the default is `working-tree`, falling back to `last-commit` when the tree is clean.
 
 | Mode             | Change set                                          | When it applies                                        |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------------ |
@@ -53,7 +53,13 @@ If the output is empty, the tree is clean: fall back to `last-commit` mode and r
 
 ### Step 2 - Confirm the change set is non-empty
 
-If the change set is still empty after the fallback, stop:
+If the change set is still empty, stop with the message matching the cause:
+
+```text
+Nothing to review. --staged was passed but nothing is staged.
+
+Stage changes with `git add <path>`, or drop --staged to review the working tree.
+```
 
 ```text
 Nothing to review. The working tree is clean and HEAD has no parent commit to compare against.
@@ -81,7 +87,7 @@ If non-empty, add a note: `<N> stash entr(y|ies) present - not included in this 
 
 ### Step 5 - Report scale
 
-Count `reviewable` paths and total changed lines (`git diff --shortstat`, plus untracked file line counts). Record both in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
+Count `reviewable` paths and total changed lines against the handle's `base` (`git diff HEAD --shortstat` for working-tree, `git diff --cached --shortstat` for staged-only, `git diff --shortstat HEAD~1..HEAD` for last-commit), plus untracked file line counts. Record both in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
 
 ## Output Format
 
