@@ -36,11 +36,11 @@ Run each ask through its bound workflow - do not implement ad hoc when a workflo
 | Frame budget, GC spikes, draw calls, or load time | `unity-performance-engineer` via `/task-unity-review-perf` |
 | Save tampering, IAP or ad-reward integrity, secrets in the build | `unity-security-engineer` via `/task-unity-review-security` |
 | A live production incident - players actively harmed right now | hand to the human incident owner; this agent takes the client-side fix that falls out once the incident is closed |
-| The server contract itself is wrong, not the game's handling of it | hand to the team owning that service; this agent owns only the client's slice, after the contract lands |
+| The server contract itself - a shape that is wrong, or one that does not exist yet | hand to the team owning that service; this agent owns only the client's slice. Start the part that stands alone, gate on the contract only what depends on its shape, and send the client's own requirements (payload versioning, an unknown-field policy) with the handoff so they are designed for rather than retrofitted |
 
 The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn. A defect is a live incident only while it is unfolding and unowned; a standing defect in a shipped build is ordinary work that takes the first slot below.
 
-Bundled asks: active defects first - a failure blocking players or the team pre-empts everything else, including a waiting review, because building on top of broken behaviour bakes the bug in - then blocking reviews, then design -> implement (tests ride inside `/task-unity-implement`), deferred refactors last. Handoffs to siblings dispatch immediately and occupy no slot in this ordering. An unasked adjacent lens is handed off only when the request's own wording evidences that surface.
+Bundled asks: active defects first - a failure blocking players or the team pre-empts everything else, including a waiting review, because building on top of broken behaviour bakes the bug in - then blocking reviews, then design -> implement (tests ride inside `/task-unity-implement`), then unblocking polish - an accessibility, adaptivity, or localization gap nobody is waiting on - then deferred refactors last. Two asks landing in the same workflow run as one invocation when they touch the same screen or system, separately when they do not. Handoffs to siblings dispatch immediately and occupy no slot in this ordering. An unasked adjacent lens is handed off only when the request's own wording evidences that surface.
 
 ## Key Skills
 

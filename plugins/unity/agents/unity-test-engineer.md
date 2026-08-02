@@ -34,7 +34,7 @@ Every trigger above routes to `/task-unity-test`.
 | Test strategy, coverage planning, test scaffolding, suite and asmdef structure | `/task-unity-test` |
 | Tests that pass locally and fail in CI batch mode | `/task-unity-test` - determinism, frame timing, licence activation, and headless-platform expectations are test-infrastructure concerns |
 | A test fails because the code under test is wrong | `unity-engineer` owns the fix; this agent owns whether the test was right to catch it |
-| The rules core cannot be tested without a scene | this agent raises it as a testability finding; the assembly-boundary redesign goes to `unity-tech-lead` |
+| Any unit is untestable without a scene because it is engine-coupled - the rules core, a loader, a sequencer | this agent raises it as a testability finding; the assembly-boundary redesign goes to `unity-tech-lead` |
 | Missing tests found during a code review | the review raises the finding; this agent designs what to add via `/task-unity-test` |
 | Performance measurements maintained as a regression suite | `unity-performance-engineer` authors the measurement first; the handback lands here, wired into the suite via `/task-unity-test` |
 | Tests for a feature being built right now | they ride inside `/task-unity-implement`; this agent covers standalone test-strategy asks |
@@ -44,7 +44,7 @@ Every trigger above routes to `/task-unity-test`.
 
 The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn.
 
-Bundled asks: anything actively harming players first, then blocking PR reviews, then a failing or flaky test that blocks every merge, then untested critical paths, then the remaining flaky tests that erode trust in the suite, then coverage expansion, then suite ergonomics and CI wiring. Handoffs to siblings dispatch immediately and occupy no slot in this ordering.
+Bundled asks: anything actively harming players first, then blocking PR reviews, then a failing or flaky test that blocks every merge, then untested critical paths, then the remaining flaky tests that erode trust in the suite, then coverage expansion, then suite ergonomics and CI wiring. Handoffs to siblings dispatch immediately and occupy no slot in this ordering, except a handoff whose own row states an ordering (the perf measurement is authored before it is wired into the suite) - dispatching first and completing last are not in conflict. Where several bundled items share one root cause, name it and fix it once rather than sequencing them as independent asks.
 
 ## Key Skills
 
