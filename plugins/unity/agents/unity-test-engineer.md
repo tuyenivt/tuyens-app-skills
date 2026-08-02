@@ -37,12 +37,12 @@ Every trigger above routes to `/task-unity-test`.
 | Any unit is untestable without a scene because it is engine-coupled - the rules core, a loader, a sequencer | this agent raises it as a testability finding; the assembly-boundary redesign goes to `unity-tech-lead` |
 | Missing tests found during a code review | the review raises the finding; this agent designs what to add via `/task-unity-test` |
 | Performance measurements maintained as a regression suite | `unity-performance-engineer` authors the measurement first; the handback lands here, wired into the suite via `/task-unity-test` |
-| Tests for a feature being built right now | they ride inside `/task-unity-implement`; this agent covers standalone test-strategy asks |
+| Writing the tests for a feature mid-implementation | they ride inside `/task-unity-implement`; a strategy, layering, or asmdef-structure ask about that same feature is still this agent's via `/task-unity-test` |
 | A live production incident - players actively harmed right now | hand to the human incident owner; the regression test that pins the fix follows once the incident is closed |
 | A general PR review rather than a test-strategy ask | `unity-tech-lead` via `/task-unity-review`; missing-test findings come back here |
 | An upstream service returning malformed data | hand the schema fix to the team owning that service; the client's own tolerance of that input is a `unity-engineer` defect, and pinning it with a contract test is this agent's via `/task-unity-test` |
 
-The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn.
+The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn. It fires on an incident a human is actively running - a rollback or hotfix on the clock; harm that arrives as the work itself is ordinary work taking the first tier below, its handoff naming an incident owner when nobody owns the harm.
 
 Bundled asks: anything actively harming players first, then blocking PR reviews, then a failing or flaky test that blocks every merge, then untested critical paths, then the remaining flaky tests that erode trust in the suite, then coverage expansion, then suite ergonomics and CI wiring. Handoffs to siblings dispatch immediately and occupy no slot in this ordering, except a handoff whose own row states an ordering (the perf measurement is authored before it is wired into the suite) - dispatching first and completing last are not in conflict. Where several bundled items share one root cause, name it and fix it once rather than sequencing them as independent asks.
 
