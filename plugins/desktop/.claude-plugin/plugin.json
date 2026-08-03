@@ -1,0 +1,9 @@
+{
+  "name": "desktop",
+  "version": "1.0.0",
+  "description": "Claude Code plugin for Rust desktop utility development. Rust 2024, Iced 0.14, rayon, rusqlite, wgpu. GUI-free core, native-performance local-first tools. Windows primary, macOS secondary.",
+  "author": {
+    "name": "Tuyen"
+  },
+  "license": "MIT"
+}

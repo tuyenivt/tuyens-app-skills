@@ -12,19 +12,24 @@ A **Claude Code plugin marketplace repository** for client application developme
 plugins/
   flutter/       # Flutter / Dart 3.x - client plugin (mobile primary, desktop secondary, web tertiary)
   unity/         # Unity 6.3 LTS / C# - client plugin, 2D games (mobile primary, desktop secondary, WebGL tertiary)
+  desktop/       # Rust 2024 / Iced 0.14 - client plugin, native local-first utilities (Windows primary, macOS secondary)
 ```
 
 Each plugin folder has a `README.md`. Each skill lives in its own directory as `SKILL.md`. Agent files are plain Markdown in `plugins/<stack>/agents/`.
 
-**Plugin independence rule: every plugin is self-contained and depends on nothing.** Exactly one plugin is installed per project - `flutter` and `unity` are never installed together - so neither may reference skills, agents, or slash commands from the other. Cross-references like that never resolve at install time and must not be authored. When both plugins need the same behaviour, each carries its own copy (see Skill Placement); duplication is the accepted cost of standalone installs.
+**Plugin independence rule: every plugin is self-contained and depends on nothing.** Exactly one plugin is installed per project - `flutter`, `unity`, and `desktop` are never installed together - so none may reference skills, agents, or slash commands from another. Cross-references like that never resolve at install time and must not be authored. When several plugins need the same behaviour, each carries its own copy (see Skill Placement); duplication is the accepted cost of standalone installs.
 
-**Both client plugins are authored against the client domain** rather than adapted from a backend plugin - transactions, connection pools, and server middleware do not map to a client. Neither reviews API contract design: a client consumes API contracts rather than designing them. The concern that does reach clients - an installed old app version must survive a server contract change - is checked inside the umbrella review and `task-<stack>-implement`. Accessibility is handled in `task-<stack>-implement` and checked at baseline depth in the umbrella's Phase E, alongside adaptivity and localization.
+**All three client plugins are authored against the client domain** rather than adapted from a backend plugin - transactions, connection pools, and server middleware do not map to a client. None reviews API contract design: a client consumes API contracts rather than designing them. For `flutter` and `unity`, the concern that does reach clients - an installed old app version must survive a server contract change - is checked inside the umbrella review and `task-<stack>-implement`. `desktop` has no server at all, so it carries no networking, auth, or contract surface; its equivalent durability concern is that an installed older build must still read what the current one persists. Accessibility is handled in `task-<stack>-implement` and checked at baseline depth in the umbrella's Phase E, alongside adaptivity and localization - with the caveat that Iced provides no screen-reader support, so `desktop`'s accessibility skill covers keyboard, focus, contrast, and text scaling only.
 
 **Review lenses are perf and security only.** The umbrella review auto-escalates into `task-<stack>-review-perf` and `task-<stack>-review-security`; there is no observability or reliability lens. The surviving scope enum is `core-only`, `+perf`, `+sec`, `full`.
 
 **Reviews read the working tree.** Uncommitted changes are the subject, not an obstacle. There is no branch-versus-base comparison, no PR requirement, and no incremental re-review checkpoint - `review-precondition-check` resolves the change set (`working-tree`, `staged-only`, or a `last-commit` fallback on a clean tree) and the workflow diffs against it.
 
 `unity` differs from `flutter` in being engine-and-asset-centric: scenes, prefabs, and ScriptableObjects are hand-authored review surface, not generated output. Its central technical opinion is the **engine-free rules core** - game rules are plain C# with no `UnityEngine` dependency, enforced by an assembly definition - which is what makes a wide genre range testable without Play mode. It targets Unity 6.3 LTS (`6000.3.x`) as a hard floor and UI Toolkit only; uGUI and pre-6.3 engines are out of scope by design.
+
+`desktop` differs from both in being local-first and destructive: it has no backend, and its risk lives in filesystem operations that lose user data when wrong. Its central technical opinion is the **GUI-free core** - file-utility logic is plain Rust with no `iced` dependency, enforced by the core crate's `Cargo.toml` - the direct analogue of unity's engine-free rules core, and what makes the destructive paths exhaustively unit-testable without a window. Two consequences shape its skills: a destructive operation ships its dry-run preview and its undo in the same change, and several desktop capabilities (printing, file associations, shell extensions, drag-out) are hard blocks that `desktop-ecosystem-boundaries` registers with an escape hatch rather than pretending to support. It targets Rust 2024 and Iced 0.14.x with Windows primary and macOS secondary; Linux is out of scope by design.
+
+`desktop` is also the only plugin whose GUI framework has a **stack-level accessibility exclusion**: Iced does not consume AccessKit, so screen-reader support does not exist and cannot be added downstream. Skills state this plainly rather than implying partial support, and never propose an AccessKit integration the framework cannot consume.
 
 ## Skill File Format
 
@@ -49,9 +54,9 @@ user-invocable: true # false = atomic skill, hidden from slash menu
 
 ## Skill Placement
 
-Every skill lives in the plugin that uses it. There is no shared plugin, so a skill both plugins need is **duplicated** into each, under the same name.
+Every skill lives in the plugin that uses it. There is no shared plugin, so a skill several plugins need is **duplicated** into each, under the same name.
 
-When editing a duplicated skill (currently `behavioral-principles` and `review-precondition-check`), apply the same change to both copies. They are expected to stay identical; divergence is a defect unless it is engine-specific by design.
+When editing a duplicated skill (currently `behavioral-principles` and `review-precondition-check`, now triplicated across `flutter`, `unity`, and `desktop`), apply the same change to every copy. They are expected to stay identical; divergence is a defect unless it is engine-specific by design. Where a stack-specific exclusion is needed - Rust's `target/` alongside the existing Dart and C# generated-path conventions - it belongs in the consuming workflow, not in the duplicated skill.
 
 Skills are resolved by name within the installed plugin, so a `Use skill: <name>` reference only resolves when the target ships in that same plugin. Before adding a reference, confirm the target directory exists under the *same* `plugins/<stack>/skills/` tree.
 

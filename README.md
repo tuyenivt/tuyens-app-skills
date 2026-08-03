@@ -32,7 +32,13 @@ claude plugin install flutter@tuyens-app-skills --scope project
 claude plugin install unity@tuyens-app-skills --scope project
 ```
 
-> Each plugin is self-contained and has no dependencies. Install exactly one per project - `flutter` and `unity` are never installed together.
+**Rust desktop utility project:**
+
+```bash
+claude plugin install desktop@tuyens-app-skills --scope project
+```
+
+> Each plugin is self-contained and has no dependencies. Install exactly one per project - `flutter`, `unity`, and `desktop` are never installed together.
 
 ## How Skills Work
 
@@ -59,12 +65,20 @@ Unity 2D games (plugin: unity)
   performance review                   -> /task-unity-review-perf
   security review                      -> /task-unity-review-security
   test strategy / scaffolds            -> /task-unity-test
+
+Rust desktop utilities (plugin: desktop)
+  implement a new feature              -> /task-desktop-implement
+  staff-level code review              -> /task-desktop-review
+  performance review                   -> /task-desktop-review-perf
+  security review                      -> /task-desktop-review-security
+  test strategy / scaffolds            -> /task-desktop-test
 ```
 
 > Neither plugin reviews API contract design - a client consumes API contracts rather than designing them. The concern that does reach clients, where an installed old app version must survive a server contract change, is checked inside the umbrella review and `/task-<stack>-implement`. Accessibility is handled during `/task-<stack>-implement` and checked at baseline depth inside the umbrella review, alongside adaptivity and localization.
 
 **Common decision points:**
 
+- "Flutter desktop vs. the desktop plugin" - both cover desktop, and they are distinguished by app type rather than by platform. Use `flutter` for a UI-heavy or backend-consuming desktop app, especially one sharing a codebase with mobile. Use `desktop` for a native-performance local utility whose cost is filesystem traversal, hashing, and image decode, and which has no backend at all.
 - "Umbrella review vs. focused review" - `/task-<stack>-review` is the general review; it auto-escalates into the perf and security lenses when the change set fires their signals. Call a focused review directly when you already know which lens you need.
 - "Review vs. implement" - reviews read a change set and report findings. `/task-<stack>-implement` designs and writes the feature, including its tests and any schema migration.
 - "Which change set gets reviewed" - reviews read the **working tree** by default, so uncommitted work is the subject. Pass `--staged` to review only staged changes; with a clean tree the review falls back to the last commit.
@@ -75,6 +89,7 @@ Unity 2D games (plugin: unity)
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [flutter](plugins/flutter) | Flutter / Dart 3.x client apps - Riverpod, go_router, Dio, Drift. Mobile primary, desktop secondary, web tertiary                                                 |
 | [unity](plugins/unity)     | Unity 6.3 LTS / C# 2D games - casual and puzzle titles. Engine-free rules core, URP 2D, UI Toolkit, Addressables. Mobile primary, desktop secondary, WebGL tertiary |
+| [desktop](plugins/desktop) | Rust 2024 / Iced 0.14 native desktop utilities - bulk file operations, dedup, local-first tools. GUI-free core, rayon, rusqlite, wgpu. Windows primary, macOS secondary |
 
 ## Notes
 

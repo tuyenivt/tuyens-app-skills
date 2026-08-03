@@ -47,6 +47,25 @@
         "addressables",
         "puzzle-games"
       ]
+    },
+    {
+      "name": "desktop",
+      "source": "./plugins/desktop",
+      "description": "Skills and agents for Rust desktop utility development with Iced.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Tuyen",
+        "url": "https://github.com/tuyenivt"
+      },
+      "tags": [
+        "rust",
+        "iced",
+        "desktop",
+        "windows",
+        "macos",
+        "file-utility",
+        "native"
+      ]
     }
   ]
 }
