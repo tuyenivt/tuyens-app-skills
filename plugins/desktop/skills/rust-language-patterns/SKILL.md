@@ -169,6 +169,10 @@ Unsafe: <none | the block, its invariant, and what upholds it>
 
 Every `unsafe` block reviewed gets a line, findings or not: `Unsafe: <file:line> - <invariant stated | INVARIANT MISSING>`.
 
+`[Must]` marks a defect - anything the Rules or the smell table names. `[Recommend]` marks a working construct with a better shape - a missed `Cow`, an intermediate `collect()`, a derive the type does not need.
+
+A review that produces no finding closes with exactly `No Rust language findings.` after any `Unsafe:` lines - a correct `clone()` or a justified `unsafe` is not written up as a defect.
+
 ## Avoid
 
 - `clone()` introduced to end a borrow the compiler rejected

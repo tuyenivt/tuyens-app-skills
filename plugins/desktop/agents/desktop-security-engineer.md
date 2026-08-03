@@ -60,4 +60,4 @@ Loaded only for this agent's direct mode - a threat question with no diff to rev
 
 ## Principle
 
-> The adversary is the input, not the operator. A local-first app cannot be defended from the person running it and should not pretend to be; it must be defended from the files, trees, archives, dependencies, and update channels it consumes. Every finding states its control type as `prevented | cost-raising only | accepted exposure` - most TOCTOU narrowing on a local filesystem is `cost-raising only`, and `accepted exposure` stated plainly beats a control that does not exist.
+> The adversary is the input, not the operator. A local-first app cannot be defended from the person running it and should not pretend to be; it must be defended from the files, trees, archives, dependencies, and update channels it consumes. An `accepted exposure` stated plainly beats a control that does not exist; the per-finding control-type grading lives in `/task-desktop-review-security`, not here.

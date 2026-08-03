@@ -42,7 +42,9 @@ Use skill: `behavioral-principles`.
 
 Read `Cargo.toml`. If it is absent, stop - this workflow covers Rust projects only. Record the workspace layout, whether a GUI-free core crate exists, the test dependencies already present (`tempfile`, `proptest`, `insta`, `rstest`, `criterion`), and the CI configuration if any.
 
-**No core crate, or one that depends on `iced`:** report it as the primary finding. Test strategy for logic embedded in view functions is a rewrite recommendation, not a test plan - say so rather than proposing elaborate UI harnessing.
+Record the request's scope: whole-project (a strategy or coverage assessment) or targeted (a named operation or module). A targeted request runs Steps 3-8 against the named surface only, and Step 9 only when the request includes CI; out-of-scope report sections are written `n/a - outside the request's scope`.
+
+**No core crate, or one that depends on `iced`:** report it as the primary finding. Test strategy for logic embedded in view functions is a rewrite recommendation, not a test plan - say so rather than proposing elaborate UI harnessing. That run still completes the report: Step 3 records where the logic lives, the Findings name the extraction targets - destructive and path-handling routines first, since Step 4 rates them Critical - and the plan covers only what is already GUI-free, with sections that have nothing GUI-free to cover written `n/a - blocked on core extraction`.
 
 ### Step 3 - Assess Current Coverage
 
@@ -141,7 +143,7 @@ Two practical notes: macOS runners bill at a 10x multiplier on private repos and
 
 ### Step 10 - Report
 
-Write the strategy and the scaffolds. Scaffolds are runnable test functions with real assertions, not `todo!()` stubs - a stub that compiles gives false coverage confidence.
+Write the strategy. Write scaffolds when the request asked for tests to be written; a strategy or assessment question gets the plan and no unrequested files. Scaffolds are runnable test functions with real assertions, not `todo!()` stubs - a stub that compiles gives false coverage confidence.
 
 ## Output Format
 
@@ -151,6 +153,7 @@ Write the strategy and the scaffolds. Scaffolds are runnable test functions with
 - Core crate: {name | none - primary finding | depends on iced - primary finding}
 - Test dependencies present: {list | none}
 - CI: {configured | absent}
+- Request scope: {whole-project | targeted: <surface>}
 
 ## Coverage Assessment
 | Surface | Priority | Current | Gap |
@@ -163,7 +166,7 @@ Write the strategy and the scaffolds. Scaffolds are runnable test functions with
 | Layer | Count proposed | Covers |
 
 ## Scaffolds Written
-[file -> what it covers. `none - assessment only` when the request was assessment]
+[file -> what it covers. `none - request did not ask for tests to be written` when it did not]
 
 ## Fixture Strategy
 - Temp directory: {crate and cleanup approach}
@@ -175,7 +178,7 @@ Write the strategy and the scaffolds. Scaffolds are runnable test functions with
 [`n/a - no persisted schema` when there is none]
 
 ## CI Matrix
-[the matrix, per-job commands, and the cost note where the repo is private. `not proposed - CI already configured` when it is]
+[the matrix, per-job commands, and the cost note where the repo is private. `not proposed - CI already configured` when it is; `n/a - outside the request's scope` for a targeted request that does not include CI]
 
 ## Determinism Risks
 [anything in the proposed suite that could flake, and what makes it deterministic. `none` when there are none]
@@ -187,6 +190,7 @@ Every slot is written. A section that does not apply is written as `n/a - {reaso
 
 - [ ] `behavioral-principles` loaded
 - [ ] `Cargo.toml` read; absence stopped the workflow
+- [ ] Request scope recorded; a targeted request narrowed the run, out-of-scope sections written `n/a`
 - [ ] Missing or `iced`-dependent core crate reported as the primary finding rather than harnessed around
 - [ ] Existing tests read before new ones proposed
 - [ ] Coverage stated as gaps against risk, not as a percentage
@@ -199,7 +203,7 @@ Every slot is written. A section that does not apply is written as `n/a - {reaso
 - [ ] Every shipped schema version has a fixture and a forward-migration test
 - [ ] Cancellation, progress ordering, parallel-equals-sequential, and backpressure covered
 - [ ] CI matrix covers Windows and macOS with fmt, clippy, test, and release build
-- [ ] Scaffolds contain real assertions, not `todo!()`
+- [ ] Scaffolds written only when the request asked for tests, and contain real assertions, not `todo!()`
 - [ ] Determinism risks named
 
 ## Avoid

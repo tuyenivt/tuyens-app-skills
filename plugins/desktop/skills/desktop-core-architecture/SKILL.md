@@ -121,6 +121,10 @@ enum Message { DuplicateFound(core::DuplicateGroup) }
 
 The core type derives `Clone` and `Debug` so Iced messages can carry it. That is the core accommodating a general constraint, not a UI dependency.
 
+### Brownfield: the boundary starts as a module
+
+In a single-crate app with logic inline in `update()`, scope the fix to the feature at hand: extract its rules into a plain module with no `iced` import, called from `update()` rather than written in it. The module gets the plan/apply shape and injected capabilities like any core code; only the manifest enforcement is missing, so `grep -r "use iced" src/<module>/` returning nothing stands in for `cargo tree`. Promote the module to a real core crate when a second feature joins it - as its own change, not this one.
+
 ## Output Format
 
 When this skill produces a finding, each carries:
@@ -133,7 +137,9 @@ Why it matters: <what becomes untestable, or what will drift>
 Fix: <the concrete move or signature change>
 ```
 
-When assessing a layout rather than a diff, produce instead:
+`core -> UI` covers any dependency from core toward the UI side, including a GUI-framework crate in the core manifest.
+
+When designing a new layout or assessing an existing one, rather than reviewing a diff, produce instead:
 
 ```
 Workspace: <crates and their dependency edges>

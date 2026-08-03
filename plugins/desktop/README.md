@@ -50,6 +50,21 @@ crates/
 
 **Some desktop capabilities are hard blocks.** Printing is unsolved in Rust; file associations are impossible by design on Windows 10+ for every stack; shell extensions need COM or Xcode. `desktop-ecosystem-boundaries` is the register of what is a Gap, what silently no-ops, and which escape hatch to use instead. `/task-desktop-implement` loads it before any design work so an impossible requirement is caught at design time.
 
+## Decisions
+
+Why this stack, in short. These are settled - the skills encode them as constraints, not choices to re-open.
+
+| Decision | Why |
+| --- | --- |
+| **Rust** | Fearless concurrency: the workload is parallel walk, hash, and decode, where a data race is a compile error rather than silent corruption. No GC pause on a large scan. |
+| **Iced** over Slint | MIT with no attribution obligation. The Elm architecture makes dry-run preview and undo fall out of the design, which matters because the operations are destructive. |
+| **Track latest**, not pinned | Accepted cost: the resolved version moves. `Cargo.lock` is the source of truth, and `cargo update` is a tested migration, not housekeeping. |
+| **FFmpeg LGPL**, dynamically linked | `--enable-gpl` would make the whole app GPL. LGPL keeps the app's own licensing free. Cost: no x264/x265, so H.264/H.265 encode goes through hardware encoders. |
+| **Closed-source, perpetual licence + free tier** | 12-month update window; the bought version runs forever. Private repo, so macOS CI bills at 10x and signing is mandatory. Licence checks are offline - there is no backend. |
+| **Accessibility gap accepted** | Personal and general-consumer tools, not procurement markets. See above. |
+
+Rejected: **Tauri** (JSON IPC on the hot path, plus a second language to review), **egui** (hand-rolled thumbnail caching, debug-UI look), **Flutter desktop** (isolates copy rather than share; FFI means a systems language anyway, plus Dart), **C# + Avalonia** (GC pauses on large scans; NativeAOT cannot cross-compile), **Qt** (memory-unsafe, dual-platform packaging upkeep), **Electron** (fails the performance bar outright).
+
 ## Agents
 
 | Agent | Description |

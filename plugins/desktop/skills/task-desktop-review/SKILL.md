@@ -67,7 +67,7 @@ There is no `+Ux` scope. Accessibility, adaptivity, and localization are reviewe
 | `target/`, `dist/`, generated bindings, `*.lock` files other than `Cargo.lock` | excluded - build output, never reviewed |
 | Vendored third-party sources | excluded from style and structure findings; still in scope for security data-flow and version concerns |
 
-A change set touching only build output is a no-op; say so rather than manufacturing findings. A `Cargo.lock`-only change set is **not** automatically a no-op - a new transitive dependency or an advisory-bearing bump is reviewable. Pure version churn with no new dependency and no advisory is the no-op case.
+A change set touching only build output is a no-op; say so rather than manufacturing findings. A `Cargo.lock`-only change set is **not** automatically a no-op - a new transitive dependency or an advisory-bearing bump is reviewable. Pure version churn with no new dependency and no advisory is the no-op case. A bump of `iced`, `wgpu`, or `winit` is never pure churn - Step 2 treats it as a framework migration.
 
 ## Invocation
 
@@ -96,7 +96,7 @@ Record: the workspace layout, whether a GUI-free core crate exists, the pinned I
 
 **Iced version.** Read the **resolved** version from `Cargo.lock` and record it. This project tracks latest rather than pinning a minor, so `Cargo.toml` holds a range and only the lockfile identifies what actually builds. Iced is pre-1.0 and its API moves between minor releases, so **a finding resting on Iced API surface names the version it assumes**. Where the resolved version differs from this plugin's guidance, note in Summary: `Detected iced <version>; this plugin's guidance targets 0.14.x - version-specific findings are annotated.` and review rather than stopping. Reduced confidence is concrete, not an adjective: no finding is downgraded on version grounds alone.
 
-**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check that the change compiles against the new version's API rather than the old one, and that any behaviour the release notes changed is accounted for.
+**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check that the change compiles against the new version's API rather than the old one, and that any behaviour the release notes changed is accounted for. A defect found this way is filed as a Phase B finding, so it survives the low-risk short-circuit.
 
 **No GUI-free core.** If the workspace has no core crate, or the existing one depends on `iced`, note it once in Summary and treat it as the standing architectural condition Phase C reports against. Do not re-raise it per file.
 
@@ -231,7 +231,7 @@ Skip if scope is **Core only**. For each selected scope, spawn one independent s
 - Depth level - the parent's resolved depth, which overrides the lens's own depth table. A lens invoked at `deep` returns its deep-only section even where its own trigger did not fire
 - Pre-confirmed stack (Rust) + the pinned Iced version, workspace layout, core-crate presence, async runtime, and persistence crate
 - The reviewable-surface table above
-- Return findings in own Output Format
+- Return only the lens's subagent sections, per its own Step 11 contract: `## Findings` plus its non-finding and deep-only sections - never the full report template
 
 **Failure isolation:** if a subagent fails or times out, continue with the rest. Note the missing scope in Summary.
 
@@ -244,8 +244,8 @@ Merge subagent findings into single Output Format. Do not append raw reports.
 - Preserve `file:line` citations
 - Order by intent, not scope
 - Note missing scopes as `Scope incomplete: <scope>`
-- Merge Next Steps with `[Implement]` / `[Delegate]` tags; re-sort by intent
-- Preserve deep-only sections returned by subagents as their own section after Next Steps - they are not findings; the merge must not drop them
+- Build Next Steps from the per-finding intent the subagents return - subagents return no Next Steps of their own; tag `[Implement]` / `[Delegate]`, re-sort by intent
+- Preserve deep-only sections returned by subagents (+Perf's `## Measurement Plan`, +Sec's `## Dependency Graph Audit`) verbatim under `## Lens Detail` - they are not findings; the merge must not drop them
 - Lens non-finding returns have fixed homes: +Perf's `## Unattributed` becomes the Summary's `**Unattributed:**` line; +Sec's `## Dependency Triage` and `## Reviewed, Not Filed` are preserved verbatim under `## Lens Detail` at any depth
 
 **Lens seams.** One defect can legitimately surface in two lenses: a directory re-walked on every keystroke is both security (a TOCTOU window widens) and perf (the I/O cost). Keep the integrity finding under +Sec and the throughput finding under +Perf, deduped to one line at the strongest intent. A hardcoded user-facing string is a Phase E maintainability finding, not +Sec, unless the string is itself a secret.
@@ -256,7 +256,7 @@ Merge subagent findings into single Output Format. Do not append raw reports.
 
 ### Step 8 - Write Report
 
-Write the assembled report to `review-<branch>.md` in the current working directory, overwriting the file if it already exists.
+Write the assembled report to `review-<branch>.md` in the current working directory, overwriting the file if it already exists. Step 8 runs in every invocation mode - the umbrella owns the report file even when it is itself invoked as a subagent; only the lens reviews return findings instead of writing.
 
 Derive `<branch>` from the handle's `current_branch`, sanitized for a filename: replace `/` and any character outside `[A-Za-z0-9_-]` with `-`, collapse consecutive `-` into one, strip leading and trailing `-`.
 

@@ -151,7 +151,7 @@ In review mode, close with exactly one status line, after any `Deferred:` lines:
 - Proposing an AccessKit integration for Iced
 - Filing a finding whose fix the framework cannot accept
 - An action reachable only by click, hover, right-click, or drag
-- Focus order that follows visual position rather than construction order
+- Construction order that diverges from visual order, so Tab jumps around the screen
 - A focus indicator distinguished only by a background tint, or identical to hover
 - Colour as the sole carrier of a warning, error, or conflict state
 - Hardcoded text sizes that ignore the OS scale setting

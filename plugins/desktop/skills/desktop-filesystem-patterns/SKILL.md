@@ -22,7 +22,7 @@ user-invocable: false
 
 ## Rules
 
-- **Paths are not UTF-8 on either platform.** Use `Path`/`PathBuf`/`OsStr` end to end. `to_string_lossy` is for display only; a path that round-trips through it is corrupted
+- **Paths are not UTF-8 on either platform.** Use `Path`/`PathBuf`/`OsStr` end to end. `to_string_lossy` is for display and comparison keys only; a path that round-trips through it back into I/O is corrupted
 - **A permission error mid-walk continues the walk and is reported.** Aborting a 200k-file scan because one directory is unreadable throws away all completed work
 - Traversal does not follow symlinks by default. Following requires a cycle guard and an explicit decision
 - **Windows path length is handled before it is hit**, not after a mystery `os error 3`
@@ -109,6 +109,8 @@ let key = normalize_nfc(&observed.to_string_lossy());
 let meta = map.get(&key);
 ```
 
+`normalize_nfc` wraps a Unicode normalization crate such as `unicode-normalization` - std provides none. The lossy string is safe here because the key is only compared, never handed back to the filesystem; for a name that is not valid Unicode, fall back to keying on the raw `OsString`.
+
 Consequences to design around: a rename that "did nothing" actually changed only the encoding; a duplicate detector reports two files that are one; a path stored in a cache never matches on the next run. Normalize to a single form for comparison keys and cache keys, and always perform the actual I/O with the `OsString` the filesystem handed you.
 
 ### Symlinks, junctions, and hardlinks
@@ -147,7 +149,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 - Category: {PathEncoding | Traversal | WindowsPath | MacNormalization | LinkHandling | ErrorHandling | AtomicWrite | Comparison}
 - Platform: {Windows | macOS | both}
-- Evidence: {measured (name the tree or repro) | estimated (stated input shape) | inferred (no source read)}
+- Evidence: {measured (name the tree or repro) | estimated (source read, no measurement; state the input shape assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Failure: {the concrete case that breaks - a name, a depth, a filesystem}
 - Fix: {the concrete change}

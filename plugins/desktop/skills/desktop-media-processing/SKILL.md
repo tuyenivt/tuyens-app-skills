@@ -136,7 +136,7 @@ When scoping a media feature rather than reviewing code, produce instead:
 
 ```
 Media type: {audio | video | both}
-Licensing: LGPL - dynamic link, no --enable-gpl
+Licensing: {LGPL - dynamic link, no --enable-gpl | n/a - no FFmpeg or FFI codec in this path}
 Decode path: {crate + features, or FFI binding + link mode}
 Encode path: {crate, FFI library, hardware encoder, or `none - decode only`}
 Link mode: {dynamic | n/a} - required whenever FFmpeg appears; `static` is a defect, not an option
@@ -146,7 +146,7 @@ Trait boundary: {the owned type crossing it, or `absent - defect`}
 Build spike: {completed on {date} | required, {estimate}}
 ```
 
-`Licensing` is a fixed value, not a question - a scope emitting anything other than the LGPL line has departed from the plugin's decision and states why in `License obligations`.
+`Licensing` is fixed, not a question, whenever FFmpeg or any FFI codec appears in either path - a scope emitting anything other than the LGPL line then has departed from the plugin's decision and states why in `License obligations`. A pure-Rust path (`symphonia` decode, `rav1e`/`rav1d`) writes the `n/a` form instead.
 
 ## Avoid
 

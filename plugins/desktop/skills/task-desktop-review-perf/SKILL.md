@@ -70,7 +70,7 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `Cargo.toml`; if it is absent, stop - this workflow reviews Rust projects only.
 
-Record the pinned Iced version, the async runtime, whether `rayon` is present, and the release profile settings (`opt-level`, `lto`, `codegen-units`, `debug-assertions`). A release profile with `opt-level = 0` or `debug-assertions = true` changes every cost claim in this review; state it if found.
+Record the pinned Iced version, the async runtime, whether `rayon` is present, and the release profile settings (`opt-level`, `lto`, `codegen-units`, `debug-assertions`). A release profile with `opt-level = 0` or `debug-assertions = true` changes every cost claim in this review; state it if found. The parent's shape does not carry the release profile: in subagent mode read it from `Cargo.toml` directly - a file read, not git - and state a distorting profile inside the Evidence line of each finding it affects.
 
 ### Step 3 - Resolve the Change Set
 
@@ -210,6 +210,8 @@ The fence below delimits the template for display only. Emit the report body as 
 ```
 
 **Omit empty sections.** No High Impact heading if there are none.
+
+**Impact tier is set by cost, label by evidence.** An `inferred` finding whose cost is High Impact stays under `### High Impact` labeled `[Recommend]` - the evidence cap changes the label, never the tier. An `inferred` finding with no source read anchors to the file path alone; a line number is never invented.
 
 ## Self-Check
 

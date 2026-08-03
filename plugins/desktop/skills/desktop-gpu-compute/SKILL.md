@@ -115,7 +115,7 @@ Check this at startup, not at first dispatch. Discovering an unavailable feature
 
 | Situation | Verdict |
 | --- | --- |
-| Thumbnails, icons, images under roughly 1 MP | CPU - transfer setup exceeds the compute |
+| Inputs under roughly 1 MP - thumbnails, icons | CPU - transfer setup exceeds the compute |
 | One pass over a few images | CPU - `rayon` already saturates the cores |
 | Multi-megapixel image, several chained passes | GPU - transfer amortizes across passes |
 | Per-pixel independent work, batch of large images | GPU |
@@ -141,11 +141,11 @@ Workload: {operation and input size}
 Verdict: {GPU | CPU | Measure first}
 Passes: {count of chained GPU passes, or `1`}
 Readback: {none | per-frame | on-save}
-Baseline: {the CPU timing this is compared against, or `not measured` - which forces Verdict: Measure first}
+Baseline: {the CPU timing this is compared against | not measured}
 Fallback tested: {yes | no}
 ```
 
-`Verdict: GPU` requires a `Baseline:` that is not `not measured`. Absent one, the verdict is `Measure first`.
+`Verdict: GPU` requires a `Baseline:` that is not `not measured` - absent one, the verdict is `Measure first`. `Verdict: CPU` stands without a baseline when a table row above justifies it.
 
 Close with `wgpu source: {iced re-export | direct dependency - defect}` so the version-coupling check is visibly done.
 

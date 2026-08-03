@@ -101,7 +101,7 @@ enum Match {
 
 **Why hash equality is not sufficient authorization**: a 64-bit perceptual hash collides between genuinely different images at scale, and even a strong content hash is a claim about bytes read at a past instant on a tree that may have changed. For a delete, either compare the bytes of the final candidates or require the user to have selected them explicitly. The cost of a byte comparison across a handful of confirmed candidates is negligible against the cost of deleting the wrong photo.
 
-Present the group with a preview and a size, and default the retained file to the largest or oldest by a stated rule rather than by iteration order.
+Present the group with a preview and a size, and default the retained file to the largest or oldest by a stated rule rather than by iteration order. The `Similar` distance cutoff ships as a user-facing sensitivity with a stated default, not a hardcoded constant - and no distance, however small, authorizes an automatic action.
 
 ### EXIF orientation
 
@@ -158,7 +158,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {DecodeSize | CacheBound | UIThread | MatchSemantics | Orientation | DecodeLimits | FailureHandling | Benchmarking}
-- Evidence: {measured (release build, name the machine and image set) | estimated (stated image count and dimensions) | inferred (no source read)}
+- Evidence: {measured (release build, name the machine and image set) | estimated (source read, no measurement; state the image count and dimensions assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Cost: {with units - "72 MB decoded per 200px thumbnail", "unbounded cache over 50k files", "180 ms UI stall per cell"}
 - Fix: {the concrete change}

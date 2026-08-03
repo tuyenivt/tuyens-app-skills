@@ -29,7 +29,7 @@ user-invocable: false
 - Messages are `Clone + Debug` and carry owned data. Iced clones them; borrowed data cannot cross the boundary
 - **Subscriptions are for streams the app does not initiate**; `Task` is for work the app started. Time ticks, window events, and keyboard input are subscriptions; a scan the user clicked Start on is a `Task`
 - A screen is split out when it owns its own state and message set, not when the file grew long
-- The model derives no `Clone` it does not need - Iced does not require the whole state to be cloneable, and adding it invites accidental copies of large result sets
+- The model derives no `Clone` it does not need - Iced does not require the whole state to be cloneable, and adding it invites accidental copies of large result sets. A large result set held by the model is by design, not a finding - the defects are cloning it and rendering it eagerly (`iced-widget-patterns`)
 
 ## Patterns
 
@@ -125,7 +125,7 @@ Message::StartScan => {
 Message::ScanFinished(results) => { self.scanning = false; self.results = results; Task::none() }
 ```
 
-`update` runs on the UI thread between frames. Anything it does is time the window is not repainting and not accepting input. The blocking call is the single most common Iced defect and the one users report as "the app hangs". Streaming intermediate progress out of that job, and cancelling it, belong to `iced-async-patterns`.
+`update` runs on the UI thread between frames. Anything it does is time the window is not repainting and not accepting input. The blocking call is the single most common Iced defect and the one users report as "the app hangs". When the same job can be re-triggered before the last one finishes - a live preview recomputed per keystroke - the completion can arrive after its input changed; the generation-id discipline that drops stale results, like streaming progress and cancellation, belongs to `iced-async-patterns`.
 
 ### Subscription or Task
 
@@ -165,16 +165,24 @@ Consequence: <what the user sees or what drifts - "window frozen for the scan's 
 Fix: <the concrete change>
 ```
 
+A defect the scope note assigns to another skill (crate placement, widget construction and lists, `Task` internals, long-job execution) is not filed under a category. It is returned as one line instead, so the observation survives:
+
+```
+Handoff: <desktop-core-architecture | iced-widget-patterns | iced-async-patterns | desktop-concurrency-patterns> - <the observation, one line>
+```
+
 When designing an app or screen rather than reviewing:
 
 ```
-Iced version: <the resolved version from Cargo.lock | UNRESOLVED - read before proceeding>
+Iced version: <the resolved version from Cargo.lock | UNRESOLVED - why the lock could not be read>
 Model: <domain fields from core, then view-only fields>
 Messages: <the variants, grouped by event source>
 Blocking work: <each long operation, and the Task or Subscription that carries it | none>
 Subscriptions: <each, and what stops it | none>
 Split: <screens with their own state and message set | single screen>
 ```
+
+`UNRESOLVED` is the branch for a `Cargo.lock` that is absent or unreadable (no project yet, or no file access). The architecture shape - model split, message design, the update/view discipline - is version-stable and is given anyway; every stated signature then carries the `UNVERIFIED` tag, and `Cargo.toml`'s range is never used as a substitute, because a range cannot answer whether an API exists.
 
 Any signature stated for an Iced API carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two.
 

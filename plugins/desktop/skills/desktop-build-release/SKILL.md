@@ -174,6 +174,8 @@ Distribution: closed-source commercial, perpetual licence + 12-month update wind
 
 It is a fixed value, not a question. A design departing from it states why on the same line.
 
+When the design targets a platform the maintainer cannot run, it carries one `QA gap:` line naming the unverified platform and the chosen mitigation - a headless CI smoke test, a beta tester with the hardware, or shipping that platform as experimental.
+
 **Review mode** - a manifest, workflow file, or build symptom was supplied. Emit one block per finding.
 
 ```

@@ -167,6 +167,10 @@ User message: <the sentence the user sees, and the action it offers>
 
 Every `unwrap`/`expect` in reviewed code gets a line, findings or not: `Panic: <file:line> - <invariant asserted | FALLIBLE - must be a Result>`.
 
+`[Must]` marks a defect the Rules name - an unwrap on a fallible result, a batch that aborts on its first item, a message the user cannot act on. `[Recommend]` marks a working path with a better shape - a context string worth adding, a summary type over a bare count.
+
+A review that produces no finding closes with exactly `No error handling findings.` after the `Panic:` lines - a justified `expect` with its invariant stated is not a finding.
+
 ## Avoid
 
 - `anyhow::Error` in a core crate's public signature

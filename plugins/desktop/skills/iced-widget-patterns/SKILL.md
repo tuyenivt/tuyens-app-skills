@@ -51,6 +51,8 @@ scrollable(column![spacer_above, column(groups[first..first + count].iter().map(
 
 This requires a fixed row height so offsets are computable without measuring. Variable-height rows need a prefix-sum index of heights, which is worth it only when the design demands them. Two rules that make the simple version correct: keep row height a constant the layout also uses, and clamp the window to the data length so a stale scroll offset after a rescan does not index out of bounds.
 
+Row media follows the same window. Thumbnails are decoded off the view path (`iced-async-patterns` owns that job) into handles stored in the model; a row entering the visible window requests its handle, and the row renders a placeholder until it arrives. `view` never decodes, reads a file, or holds pixels for off-screen rows.
+
 Before hand-rolling this, check whether the pinned version's `table` or `scrollable` already offers a lazy or windowed variant - Iced's widget set gains capabilities each minor, and reimplementing one is avoidable cost.
 
 ### The native `table` widget
@@ -118,7 +120,7 @@ Hardcoded colours are the reason an app looks correct in light mode and unreadab
 
 Focus order follows construction order, so build the tree in the order the user should traverse it rather than reordering visually afterwards. Wire the conventional bindings explicitly - Enter to confirm, Escape to dismiss, arrows to move selection in a list - via a keyboard subscription or `on_press` handlers; Iced does not supply them.
 
-State the ceiling plainly when accessibility is discussed: Iced exposes no accessibility tree, so a screen reader announces nothing about this UI. That is a stack limitation, not a project defect, and it is not closed by widget choices. What is in scope: keyboard operability, visible focus indicators, sufficient contrast from the theme palette, and text that is not the only carrier of a state (pair colour with a label or icon).
+State the ceiling plainly when accessibility is discussed: Iced exposes no accessibility tree, so a screen reader announces nothing about this UI. That is a stack limitation, not a project defect, and it is not closed by widget choices - nor by AccessKit, which Iced does not consume; do not propose an AccessKit integration. What is in scope: keyboard operability, visible focus indicators, sufficient contrast from the theme palette, and text that is not the only carrier of a state (pair colour with a label or icon).
 
 ### The states around the happy path
 
@@ -144,7 +146,7 @@ When this skill produces a finding:
 
 ```
 [Must|Recommend] <file:line>
-Category: <virtualization | table-widget | element-lifetime | custom-widget | styling | keyboard-focus | missing-state | per-frame-work>
+Category: <virtualization | table-widget | element-lifetime | custom-widget | styling | keyboard-focus | colour-only-signal | missing-state | per-frame-work>
 Issue: <the defect, named>
 Consequence: <what the user sees - "UI locks for ~8s on a 100k-row result", "unreadable in dark theme">
 Fix: <the concrete change>
@@ -163,6 +165,8 @@ Styling: <theme-derived | hardcoded values, and why>
 ```
 
 Any signature stated for an Iced widget carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two.
+
+When asked for guidance with no code supplied, answer in the design format with `Iced version: UNRESOLVED`, fill every slot the request allows, and name the view files needed to go further - never emit `file:line` findings against code that was not shown.
 
 ## Avoid
 

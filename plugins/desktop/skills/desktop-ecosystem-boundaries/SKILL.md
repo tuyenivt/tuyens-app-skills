@@ -26,7 +26,7 @@ user-invocable: false
 - **Silent-failure traps are prerequisites, not polish.** Notifications, Keychain, and GPU selection each depend on packaging, signing, or process-start environment that no amount of application code substitutes for. Schedule them before the feature they gate, never after
 - A crate whose last release predates the current year by more than two years is Gap regardless of download count. `sled` at 0.34.7 from 2021 is dead; `rusqlite` replaces it
 - License is a verdict input, not a footnote. AGPL and GPL dependencies disqualify a closed-source app outright and appear in `Caveat:` before any technical merit
-- **Verdicts are stated with the evidence that produced them** - version number, issue number, or date. `Workable` with no cited version is not a verdict, it is a guess
+- **Verdicts are stated with the evidence that produced them** - version number, issue number, or date. `Workable` with no cited version is not a verdict, it is a guess. Where this register names a crate without a version, run the crates.io check and cite what it returns rather than guessing one
 
 ## Patterns
 
@@ -124,6 +124,7 @@ One block per capability assessed:
 ```
 Capability: {name}
 Verdict: {Strong | Workable | Gap}
+Blocked for: {Rust-specific | universal} - required when Verdict is Gap; omit otherwise
 Crate/approach: {crate + version, or the mechanism; `none` when Verdict is Gap}
 Caveat: {the trap, license, or prerequisite; `none` when Strong}
 Escape hatch: {required when Verdict is Gap; omit for Strong and Workable}
@@ -131,7 +132,7 @@ Escape hatch: {required when Verdict is Gap; omit for Strong and Workable}
 
 `Escape hatch:` is mandatory on every `Gap` block. A Gap without one is an unanswered requirement, not a finding.
 
-When the assessed capability sits in the silent-failure set, add one line before `Escape hatch:`:
+When the assessed capability sits in the silent-failure set, add one line after `Caveat:`:
 
 ```
 Prerequisite: {packaging, signing, or launcher-environment step that must ship first}

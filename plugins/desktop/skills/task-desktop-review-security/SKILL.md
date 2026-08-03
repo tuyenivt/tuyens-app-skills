@@ -85,7 +85,7 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `Cargo.toml`; if it is absent, stop - this workflow reviews Rust projects only.
 
-Record whether the app fetches anything over the network, whether it reads credentials, whether it ships an updater, and whether any FFI or `-sys` crate is present.
+Record whether the app fetches anything over the network, whether it reads credentials, whether it ships an updater, and whether any FFI or `-sys` crate is present. The parent's shape does not carry these four facts: in subagent mode establish them from the manifest and source directly - file reads, not git.
 
 ### Step 3 - Resolve the Change Set
 

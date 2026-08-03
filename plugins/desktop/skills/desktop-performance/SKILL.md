@@ -173,7 +173,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {Algorithmic | HashChoice | IOOrdering | Allocation | Startup | BuildProfile | Caching | Memory}
-- Evidence: {measured (tool, machine, input scale) | estimated (stated input scale) | inferred (no source read)}
+- Evidence: {measured (tool, machine, input scale) | estimated (source read, no measurement; state the input scale assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Cost: {with units - "400 GB read to find 2 GB of duplicates", "1.8 s before first paint", "2 allocations x 200k files", "SHA-256 at 400 MB/s vs 3 GB/s disk"}
 - Fix: {the concrete change}
@@ -182,9 +182,9 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 `Severity: {Critical | High | Medium | Low}` - Critical = unusable at a realistic input scale, or unbounded memory growth. High = a measurable regression on a primary path, or an algorithmic shape one tier away from a large win. Medium = cost on a rare path or only at unlikely input sizes. Low = a cheap win with no observed symptom.
 
-**Evidence gating.** `measured` requires a release-build number, and the block names the tool and the machine. `estimated` requires a stated input scale ("100k files, 400 GB"); without one it is `inferred`. `inferred (no source read)` covers findings from a bug report or a stated fact rather than source that was read, and states what was not seen. A debug-build timing is never `measured`.
+**Evidence gating.** `measured` requires a release-build number, and the block names the tool and the machine. `estimated` covers a finding read from source without a measurement, and names the input scale it assumes ("100k files, 400 GB"). `inferred` covers a finding from a bug report or a stated fact with no source read, and states what was not seen. A debug-build timing is never `measured`.
 
-`inferred` can never alone justify a `[Must]` or a Critical: both `estimated` and `inferred` bound the header at High, with `Cost` naming the uncapped band, and neither ever raises a block. Never report a number that was not measured as if it were.
+`inferred` can never alone justify a Critical here, nor a `[Must]` in a consuming review workflow: both `estimated` and `inferred` bound the header at High, with `Cost` naming the uncapped band, and neither ever raises a block. Never report a number that was not measured as if it were.
 
 `Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Cost`. Among blocks sharing a band, order by what must be fixed first: the algorithmic shape before the micro-optimizations inside it.
 
@@ -200,7 +200,7 @@ In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 A symptom-only report is checkable input: emit `inferred` findings from it rather than the not-run line.
 
-When invoked from an implementation workflow rather than a review, emit a budget table instead:
+When invoked from an implementation workflow rather than a review, emit a budget table instead of finding blocks (`Deferred:` lines still follow it):
 
 ```
 | Surface | Budget | Risk | Mitigation |

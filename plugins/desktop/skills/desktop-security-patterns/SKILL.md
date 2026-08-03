@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm the app has no server and no multi-user model before applying this skill - it is written for a local-first tool running with the invoking user's own privileges.
 >
-> This skill owns **what a hostile input or a hostile tree can do to the user's data**. Traversal and path mechanics belong to `desktop-filesystem-patterns`; preview, undo, and per-item outcomes to `desktop-batch-operations`; decoder limits and pixel budgets to `desktop-image-processing`; signing and packaging mechanics to `desktop-build-release`; credential storage APIs to `desktop-platform-integration`.
+> This skill owns **what a hostile input or a hostile tree can do to the user's data**. Generic traversal and path-string mechanics belong to `desktop-filesystem-patterns` - containment proofs against untrusted names stay here; preview, undo, and per-item outcomes to `desktop-batch-operations`; decoder limits and pixel budgets to `desktop-image-processing`; signing and packaging mechanics to `desktop-build-release`; credential storage APIs to `desktop-platform-integration`.
 
 ## When to Use
 
@@ -149,7 +149,7 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 - Category: {CraftedInput | PathEscape | LinkHandling | TOCTOU | UnsafeFFI | ProcessSpawn | DependencyAdvisory | UpdateIntegrity | CredentialStorage}
 - Evidence: {source | inferred (state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
-- Attack: {what the hostile input or tree does, concretely - "an archive entry named ../../ writes outside the extraction root"}
+- Attack: {the mechanism, concretely - "an archive entry named ../../ writes outside the extraction root"; a link or a concurrent change needs no adversary - state what the tree does, not who}
 - Consequence: {what the user loses - name the files or the bytes, not "compromise"}
 - Control type: {prevented | cost-raising only | accepted exposure}
 - Fix: {the concrete change}

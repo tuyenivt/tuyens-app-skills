@@ -43,6 +43,8 @@ pub fn apply(plan: &Plan) -> Journal;                      // executes, records
 
 `plan` is pure enough to unit test exhaustively. `apply` is the only function that touches the disk destructively, which keeps the audit surface small.
 
+`conflicts` carries what the plan cannot resolve on its own - an unwritable source, a target the policy forbids overwriting - and the preview shows them as blockers. A collision the suffix policy resolves is not a conflict; it is a step with an adjusted target.
+
 ### Collision resolution, including intra-batch collisions
 
 The defect that separates a working rename tool from a broken one: two inputs whose new names collide with each other, where neither collides with anything on disk.
@@ -67,10 +69,11 @@ fn resolve(target: &Path, claimed: &mut HashSet<PathBuf>) -> PathBuf {
 }
 ```
 
-Two further cases the naive version misses:
+Three further cases the naive version misses:
 
 - **Case-insensitive filesystems.** On Windows and default macOS, `Photo.txt` and `photo.txt` are the same name. `claimed` must compare case-insensitively where the target filesystem does, or the batch collides at apply time after a clean preview.
-- **A later step's source is an earlier step's target.** Renaming `1.txt -> 2.txt` and `2.txt -> 3.txt` in that order destroys the original `2.txt`. Detect the cycle and either order the steps safely or route through a temporary name.
+- **A case-only rename is not a collision.** `photo.jpg -> Photo.jpg` on a case-insensitive filesystem makes `candidate.exists()` true because the candidate *is* the source. Exempt a step's own source from the exists/claimed check, or every case-only rename gains a spurious suffix.
+- **A later step's source is an earlier step's target.** Renaming `1.txt -> 2.txt` and `2.txt -> 3.txt` in that order destroys the original `2.txt`. Detect the dependency and apply the later step first (`2 -> 3`, then `1 -> 2`). A true cycle (`a -> b`, `b -> a`) has no safe order and must route through a temporary name.
 
 ### Auto-suffix naming
 
@@ -95,7 +98,7 @@ fn suffixed(path: &Path, n: u32) -> PathBuf {
 Decide and document three behaviours, because users notice all of them:
 
 - A name that **already ends in a suffix**: does `photo (1).jpg` become `photo (2).jpg`, or `photo (1) (1).jpg`? Re-using the existing counter is usually expected
-- **Multi-part extensions**: `archive.tar.gz` - `file_stem` gives `archive.tar`, so the naive version yields `archive.tar (1).gz`, which is wrong for this case and right for `photo.jpg`. Pick a rule and test it
+- **Multi-part extensions**: `archive.tar.gz` - `file_stem` gives `archive.tar`, so the naive version yields `archive.tar (1).gz`, which is wrong for this case and right for `photo.jpg`. Default: keep a small list of known multi-part extensions (`.tar.gz`, `.tar.bz2`, `.tar.xz`) and suffix before the whole unit - `archive (1).tar.gz`; split on the last extension for everything else. Test whichever rule ships
 - **Length limits**: appending a suffix can push a name past the filesystem's limit; truncate the stem rather than failing the item
 
 ### The undo journal
@@ -115,7 +118,7 @@ for step in &plan.steps {
 }
 ```
 
-The journal is written incrementally and durably where the batch is large enough that a crash mid-run is plausible. A journal held only in memory does not survive the process being killed - which is exactly when undo matters most.
+The journal is written incrementally and durably where the batch is large enough that a crash mid-run is plausible. A journal held only in memory does not survive the process being killed - which is exactly when undo matters most. Its home is the app's data directory, not the tree being modified; `desktop-data-persistence` owns the schema and location conventions.
 
 Undo replays the journal in reverse. It is itself a batch operation and gets the same collision handling: the original name may have been taken since.
 
@@ -151,7 +154,7 @@ When this skill produces a finding:
 ```
 [Must|Recommend] <file:line>
 Operation: <rename | move | delete | overwrite | copy>
-Gap: <preview | undo | intra-batch collision | case-insensitive collision | rename cycle | partial-failure reporting | journal durability | suffix rule>
+Gap: <preview | undo | intra-batch collision | case-insensitive collision | rename cycle | partial-failure reporting | journal accuracy | journal durability | suffix rule>
 Consequence: <what the user loses, concretely>
 Fix: <the concrete change>
 ```

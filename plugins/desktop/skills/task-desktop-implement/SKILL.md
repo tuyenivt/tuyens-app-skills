@@ -200,6 +200,7 @@ API claims verified against: {version}
 
 ## Views
 | View | Scanning | Error | Empty |
+[one row per view the feature adds or modifies. A view with no async or failable source writes `n/a - no async source` across the three state columns; a modified view whose pre-existing states this feature does not touch writes `unchanged`]
 
 ## Concurrency
 - Worker: {what runs off the UI thread, or `none - no long operation`}
@@ -207,7 +208,7 @@ API claims verified against: {version}
 - Cancellation: {how it propagates, or `none - operation is not cancellable, with the reason`}
 
 ## Persistence Impact
-- Schema version: {old, or `none - no existing store`} -> {new}
+- Schema version: {old, or `none - no existing store`} -> {new, or `unchanged - no shape change`}
 - Migration: {step, or `none - no shape change`}
 - Location: {per-platform path, or `n/a - nothing persisted`}
 
@@ -226,8 +227,8 @@ API claims verified against: {version}
 | Tier | Shipped | Caveats applied |
 
 ## Tests
-- Unit: {count}
-- Integration: {count}
+- Unit: {count} - {surfaces covered, or the STEP 7 statement of why 0 is correct}
+- Integration: {count} - {composition under test, or `none - no crate composition under test`}
 
 ## Validation
 **Status:** {verified - all four commands ran and passed | unverified - <which of the four could not run, and why>}
@@ -235,7 +236,7 @@ API claims verified against: {version}
 [command -> result for each STEP 8 command; unavailable commands named with the reason]
 ```
 
-Every slot above is written. A step that did not run is written as `skipped - {reason}` rather than omitted.
+Every slot above is written. A step that did not run is written as `skipped - {reason}` rather than omitted. A run STEP 1 stopped writes the Project Gate section alone - the sections below it describe work that never ran and are omitted, not back-filled with `skipped`.
 
 ## Self-Check
 
@@ -253,7 +254,7 @@ Every slot above is written. A step that did not run is written as `skipped - {r
 - [ ] Paths handled as `Path`/`OsStr`, never assumed UTF-8
 - [ ] Long work runs off the UI thread; `update` never blocks; cancellation propagates
 - [ ] Result lists virtualized; thumbnails decoded off-thread with bounded caching
-- [ ] Every view renders scanning, error, and empty states
+- [ ] Every view with an async or failable source renders scanning, error, and empty states
 - [ ] Keyboard navigation, focus order, contrast, and text scaling present
 - [ ] User-facing strings behind localization keys, or held in one module with the deviation stated
 - [ ] Deviations and accepted exposure written in the report, `none` / `n/a` where there are none

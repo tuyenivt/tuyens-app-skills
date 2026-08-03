@@ -23,7 +23,7 @@ user-invocable: false
 ## Rules
 
 - **`rusqlite` with the `bundled` feature is the default store.** It compiles SQLite from source, so there is no system dependency to hunt on either platform and no version skew between a developer machine and a user's
-- **`sled` is dead. Do not introduce it.** The published release is 0.34.7 from 2021 and the 1.0 alpha line stalled in 2024. `redb` is alive but has broken its on-disk format twice, so adopting it means owning format-migration code the app did not ask for
+- **`sled` is dead. Do not introduce it.** The published release is 0.34.7 from 2021 and the 1.0 alpha line stalled in 2024. `redb` is alive but has broken its on-disk format twice, so adopting it means owning format-migration code the app did not ask for. `sled` found already shipped is a `StoreChoice` finding, not an emergency: the fix is a one-time import into SQLite - High when the store holds data the user cannot regenerate, Medium otherwise
 - Schema version lives in SQLite's `user_version` pragma. A version tracked in a side file drifts from the database it describes
 - **Migrations are forward-only and each one ships with a fixture database from the version it upgrades.** A migration tested only against a freshly-created schema is untested
 - Config and data directories come from the `directories` crate. A hardcoded `~/.myapp` or `%APPDATA%\myapp` is wrong on at least one target
@@ -162,7 +162,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {StoreChoice | Migration | FixtureCoverage | Paths | AtomicWrite | CacheInvalidation | Corruption | SettingsCompat}
-- Evidence: {measured (name the version or fixture reproduced against) | estimated (stated schema history) | inferred (no source read)}
+- Evidence: {measured (name the version or fixture reproduced against) | estimated (source read, no fixture run; state the schema history assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Failure: {the concrete case that breaks - which upgrade path, which platform, which stale read}
 - Fix: {the concrete change}

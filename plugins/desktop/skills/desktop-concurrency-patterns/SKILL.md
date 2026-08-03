@@ -165,7 +165,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {Backpressure | UnboundedSpawn | Cancellation | ProgressFlood | Contention | Determinism | WrongWorkload | PanicHandling}
-- Evidence: {measured (name the tool, machine, and input scale) | estimated (stated item count and payload size) | inferred (no source read)}
+- Evidence: {measured (name the tool, machine, and input scale) | estimated (source read, no measurement; state the item count and payload size assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Failure: {the concrete state that goes wrong - queue depth, thread count, stall duration, a differing run}
 - Fix: {the concrete change}

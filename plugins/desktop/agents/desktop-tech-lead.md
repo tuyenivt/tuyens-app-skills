@@ -33,7 +33,7 @@ Run each ask through its bound workflow - do not review ad hoc when a workflow f
 | Standalone test strategy, core-crate coverage, filesystem fixtures, migration fixtures, or CI matrix | `desktop-test-engineer` via `/task-desktop-test` |
 | Standalone keyboard-reach, focus, contrast, OS-text-scaling, or localization ask | `desktop-engineer` - there is no UX review lens; Iced has no screen-reader support, so a11y here is keyboard, focus, and contrast only, an implementation concern carrying a Phase E baseline check |
 | Implementing a feature or the fixes a review produced | `desktop-engineer` via `/task-desktop-implement` |
-| Unexplained runtime failure - a panic, a path bug, a hang, a deadlock, a frozen window - not currently destroying user data | `desktop-engineer` |
+| Unexplained runtime failure outside a live incident - a panic, a path bug, a hang, a deadlock, a frozen window, or a shipped data-destroying bug no human is running an incident for | `desktop-engineer` |
 | Refactoring direction, smell triage, or crate-boundary guidance with no diff to review | this agent, directly - there is no refactor workflow |
 
 - A requirement that lands on an OS-level or ecosystem hard block - printing, `UserChoice` file associations, shell extensions, drag-out to Explorer or Finder - is not reviewed as a code defect. Route it to `desktop-ecosystem-boundaries` for the verdict, state the escape hatch that gets estimated instead, and say whether the block is Rust-specific or universal. A rewrite proposed against a universal block is itself a review finding.

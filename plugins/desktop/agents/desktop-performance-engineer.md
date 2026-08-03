@@ -60,4 +60,4 @@ Loaded only for this agent's direct mode - a cost question with no diff to revie
 
 ## Principle
 
-> Measure first, and say which budget you measured. Every finding carries its evidence as `measured | estimated | inferred` and the input scale it assumes - a file count, an image size, an item count. An `inferred` finding is never a `[Must]`. A debug-build timing is not evidence for a release build, and a timing on an NVMe developer machine over 500 files says nothing about the 200k-file external drive users actually complain about.
+> Measure first, and say which budget you measured. State the input scale a claim assumes - a file count, an image size, an item count - because a debug-build timing is not evidence for a release build, and a timing on an NVMe developer machine over 500 files says nothing about the 200k-file external drive users actually complain about. The per-finding evidence grading and its severity cap live in `/task-desktop-review-perf`, not here.

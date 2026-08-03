@@ -50,26 +50,23 @@ For work that is CPU-bound rather than await-bound, do not wrap the blocking cal
 The shape that matters for this app class: a scan over 100k files reports as it goes, without blocking `update` and without one message per file.
 
 ```rust
-// Worker side - std::thread plus rayon, sending coalesced progress on a channel
-let (tx, rx) = std::sync::mpsc::channel();
+// Worker side - std::thread plus rayon, one bounded channel, one message per chunk
+let (tx, rx) = std::sync::mpsc::sync_channel(8);   // bounded: producer blocks if the UI falls behind
 std::thread::spawn(move || {
     let done = AtomicUsize::new(0);
-    paths.par_iter().for_each(|p| {
-        if cancel.load(Ordering::Relaxed) { return; }
-        let out = hash(p);
-        let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-        if n % 256 == 0 { let _ = tx.send(Event::Progress(n)); }
-        let _ = tx.send(Event::Item(out));
+    paths.par_chunks(256).for_each(|chunk| {
+        if cancel.load(Ordering::Relaxed) { return; }   // per-item granularity: see Cancellation below
+        let items: Vec<_> = chunk.iter().map(hash).collect();
+        let n = done.fetch_add(items.len(), Ordering::Relaxed) + items.len();
+        let _ = tx.send(Event::Batch { done: n, items });   // progress and results, coalesced together
     });
     let _ = tx.send(Event::Finished);
 });
 ```
 
-The UI side turns that receiver into a stream of messages. Iced provides stream-backed `Task` and `Subscription` constructors for exactly this; their names and signatures differ per minor version, so look up the pinned version's helper rather than assuming one. Whichever is used, the model carries the job's generation id and `update` ignores messages from any other generation.
+The UI side turns that receiver into a stream of messages via the pinned version's stream-backed `Task` constructor - this scan is user-started, so per the rule above it is a `Task`, not a `Subscription`. The constructor's name and signature differ per minor version; look up the pinned version's helper rather than assuming one. The model carries the job's generation id and `update` ignores messages from any other generation.
 
-Coalescing is not optional at this scale. Emitting `Progress` per file makes the queue the bottleneck and the progress bar update slower than if it were not there at all. Every 256 items, or every 100 ms, are both defensible; per item is not.
-
-Item results are the same question. Sending 100k individual `Item` messages costs 100k `update` calls; batch them into chunks and extend the model's vector per chunk.
+Coalescing is not optional at this scale, and it covers results as well as progress. One message per file makes the queue the bottleneck and the progress bar update slower than if it were not there at all, and 100k individual `Item` messages cost 100k `update` calls. Send one batch per chunk - every 256 items or every 100 ms are both defensible - and extend the model's vector per batch.
 
 ### Cancellation that actually stops work
 
@@ -154,6 +151,8 @@ Executor: <Iced's only - no second runtime>
 ```
 
 Any signature stated for an Iced async API carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two.
+
+When a symptom is reported without source ("the app freezes when I scan"), never emit `file:line` findings against code that was not shown. Name the candidate causes in likelihood order - blocking work in `update`, `block_on` on the UI path, CPU-bound work occupying the executor, one message per item flooding the queue - and request the `update` arm that starts the job, the worker code, and `Cargo.lock` before filing findings.
 
 ## Avoid
 

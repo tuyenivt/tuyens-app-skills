@@ -128,7 +128,7 @@ Store the smallest possible thing - a token, never a re-derivable secret - and t
 
 Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
 
-**Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line.
+**Authoring mode** - the request is to write or design something. Emit the code or design, one `Degraded:` line per integration stating what the app does when the OS refuses or the capability is absent, then any `Deferred:` lines. No finding blocks, no severity, no status line.
 
 **Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
 
