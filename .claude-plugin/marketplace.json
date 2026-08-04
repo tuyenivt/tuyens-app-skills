@@ -10,7 +10,7 @@
       "name": "flutter",
       "source": "./plugins/flutter",
       "description": "Skills and agents for Flutter/Dart client development.",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenivt"
@@ -31,7 +31,7 @@
       "name": "unity",
       "source": "./plugins/unity",
       "description": "Skills and agents for Unity 2D game development.",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenivt"
@@ -52,7 +52,7 @@
       "name": "desktop",
       "source": "./plugins/desktop",
       "description": "Skills and agents for Rust desktop utility development with Iced.",
-      "version": "1.0.0",
+      "version": "1.4.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenivt"

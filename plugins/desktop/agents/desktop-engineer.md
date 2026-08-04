@@ -36,7 +36,7 @@ Run each ask through its bound workflow - do not implement ad hoc when a workflo
 | Standalone test strategy, core-crate coverage, filesystem fixtures, migration fixtures, or the CI matrix | `desktop-test-engineer` via `/task-desktop-test` |
 | Review of a Rust desktop diff - this agent's own work or otherwise | `desktop-tech-lead` via `/task-desktop-review` |
 | Refactoring direction or crate-boundary guidance with no diff to review | `desktop-tech-lead` |
-| Scan throughput, hash or decode cost, a blocked UI thread, allocation, cache sizing, startup time | `desktop-performance-engineer` via `/task-desktop-review-perf` |
+| Scan throughput, hash or decode cost, a blocked UI thread, allocation, cache sizing, startup time - asked as a cost or responsiveness question about working behaviour | `desktop-performance-engineer` via `/task-desktop-review-perf`; the same symptom reported as a failure - the window is frozen, the scan never finishes - is triage above |
 | Path escape, symlink or junction traversal, TOCTOU on a destructive op, archive extraction, `unsafe` or FFI, dependency advisories, update signing | `desktop-security-engineer` via `/task-desktop-review-security` |
 | A requirement that needs an OS-level or ecosystem capability this stack cannot reach - printing, `UserChoice` file associations, shell extensions, drag-out to Explorer or Finder | resolve the verdict with `desktop-ecosystem-boundaries` before designing anything. A `Gap` is renegotiated at design time: state the escape hatch and estimate that instead, and state whether the block is Rust-specific or universal so nobody proposes a rewrite that would fail identically. Do not start an implementation that ends at the block |
 

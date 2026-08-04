@@ -28,7 +28,7 @@ Run each ask through its bound workflow - do not review ad hoc when a workflow f
 | A live production incident - a shipped build actively destroying or corrupting user data right now | hand to the human incident owner; the review follows once the incident is closed |
 | Code review of Rust desktop changes | `/task-desktop-review` (staff-level umbrella; scope `core-only \| +perf \| +sec \| full`, escalating into parallel perf and security subagents) |
 | A perf or security concern named *inside* a diff under review | stays here - carry it into `/task-desktop-review` as review context and state the scope it escalates to, rather than routing it out as a standalone ask |
-| Standalone throughput, UI-responsiveness, allocation, cache, startup-time, or binary-size ask beyond a change review | `desktop-performance-engineer` via `/task-desktop-review-perf` |
+| Standalone throughput, UI-responsiveness, allocation, cache, startup-time, or binary-size ask beyond a change review | `desktop-performance-engineer` via `/task-desktop-review-perf`. Perceived slowness with no measured cost - a missing progress indicator, a dead cancel button, an empty state that looks like a hang - stays in `/task-desktop-review`, which owns loading, empty, and error states |
 | Standalone security audit ask - path escape, symlink or junction traversal, TOCTOU on a destructive op, archive extraction, `unsafe` or FFI, dependency advisories, update signing - beyond a change review | `desktop-security-engineer` via `/task-desktop-review-security` |
 | Standalone test strategy, core-crate coverage, filesystem fixtures, migration fixtures, or CI matrix | `desktop-test-engineer` via `/task-desktop-test` |
 | Standalone keyboard-reach, focus, contrast, OS-text-scaling, or localization ask | `desktop-engineer` - there is no UX review lens; Iced has no screen-reader support, so a11y here is keyboard, focus, and contrast only, an implementation concern carrying a Phase E baseline check |
@@ -45,7 +45,7 @@ Run each ask through its bound workflow - do not review ad hoc when a workflow f
 
 When reviewing across a session or series of changes, accumulate:
 
-- **Project standards**: Any explicit rules stated by the user or found in the repo context file, `clippy` and lint configuration, workspace crate boundaries, the pinned `iced` version, or review checklists
+- **Project standards**: Any explicit rules stated by the user or found in the repo context file, `clippy` and lint configuration, workspace crate boundaries, the resolved `iced` version from `Cargo.lock` (this stack tracks latest, not a pin), or review checklists
 - **Recurring findings**: Issues seen more than once in this session - flag recurrence explicitly
 - **Approved patterns**: Patterns deliberately accepted (avoids re-flagging accepted technical debt)
 - **Past feedback applied**: Changes made in response to prior review - acknowledge improvements

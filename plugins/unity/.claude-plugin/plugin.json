@@ -1,6 +1,6 @@
 {
   "name": "unity",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Claude Code plugin for Unity 2D game development. Unity 6.3 LTS, URP 2D, UI Toolkit, Input System, Addressables. Engine-free rules core, EditMode-testable gameplay. Mobile primary, desktop secondary, WebGL tertiary. Works with core plugin.",
   "author": {
     "name": "Tuyen"
