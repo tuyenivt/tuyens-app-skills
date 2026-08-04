@@ -13,7 +13,7 @@ The right pattern: **one marketplace add per machine, then per-project plugin in
 ### Step 1 - Add the marketplace once (user scope, done once per machine)
 
 ```bash
-claude plugin marketplace add tuyenivt/tuyens-app-skills
+claude plugin marketplace add tuyenwork/tuyens-app-skills
 ```
 
 ### Step 2 - Install the relevant plugin inside each project (project scope)

@@ -44,11 +44,11 @@ Every trigger above routes to `/task-desktop-review-perf` - the workflow owns me
 
 The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn. It fires on an incident a human is actively running - a pulled release or a hotfix on the clock; harm that arrives as the work itself - a shipped build that hangs on every large scan - is ordinary work taking the first tier below, and when users are hurt and nobody owns the incident, the handoff names that owner while the review proceeds.
 
-Bundled asks: anything actively harming users first - a shipped build that hangs, exhausts memory, or freezes on a real-sized tree pre-empts the rest - then blocking reviews, then remaining lens work as one `/task-desktop-review-perf` invocation, ordered UI responsiveness before raw throughput because a frozen window is what users report, then deferred refactors. Handoffs dispatch immediately and occupy no slot in this ordering, except a handoff whose own row states an ordering (the tech-lead refactor waits for the review). Independent asks in the same tier dispatch in parallel; where one ask's output is another's input, the dependency orders them ahead of the tier - the measurement is taken before it is wired into a regression suite. An unasked adjacent gap noticed in passing is flagged to its owning lens and dispatched only when evidence supports it.
+Bundled asks: anything actively harming users first - a shipped build that hangs, exhausts memory, or freezes on a real-sized tree pre-empts the rest - then blocking reviews, then remaining lens work as one `/task-desktop-review-perf` invocation, ordered UI responsiveness before raw throughput because a frozen window is what users report, then deferred refactors. Handoffs dispatch immediately and occupy no slot in this ordering, except a handoff whose own row states an ordering (the tech-lead refactor and the measured-fix implementation wait for the review). Independent asks in the same tier dispatch in parallel; where one ask's output is another's input, the dependency orders them ahead of the tier - the measurement is taken before it is wired into a regression suite. An unasked adjacent gap noticed in passing is flagged to its owning lens and dispatched only when evidence supports it.
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - a cost question with no diff to review. `/task-desktop-review-perf` loads its own skills.
+Loaded only when this agent acts with no workflow running - a cost question with no diff to review, or a verdict a routing row orders. `/task-desktop-review-perf` loads its own skills.
 
 - Use skill: `desktop-performance` for two-tier size-then-hash grouping, hash selection, I/O ordering, allocation, startup cost, and the release profile
 - Use skill: `desktop-concurrency-patterns` for I/O-bound versus CPU-bound parallelism, backpressure, throttled progress, and lock contention
@@ -57,6 +57,7 @@ Loaded only for this agent's direct mode - a cost question with no diff to revie
 - Use skill: `iced-widget-patterns` for virtualized lists and the cost of building a view per item
 - Use skill: `desktop-gpu-compute` when a GPU path is proposed and the transfer cost has to be weighed against the CPU baseline
 - Use skill: `desktop-build-release` for LTO, stripping, and what the shipped artifact weighs
+- Use skill: `desktop-ecosystem-boundaries` to resolve an ecosystem-cost verdict named in Routing - this agent resolves it directly
 
 ## Principle
 

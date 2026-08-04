@@ -27,7 +27,7 @@ Run each ask through its bound workflow - do not review ad hoc when a workflow f
 | --- | ----- |
 | A live production incident - a shipped build actively destroying or corrupting user data right now | hand to the human incident owner; the review follows once the incident is closed |
 | Code review of Rust desktop changes | `/task-desktop-review` (staff-level umbrella; scope `core-only \| +perf \| +sec \| full`, escalating into parallel perf and security subagents) |
-| A perf or security concern named *inside* a diff under review | stays here - carry it into `/task-desktop-review` as review context and state the scope it escalates to, rather than routing it out as a standalone ask |
+| A perf or security concern named *inside* a diff under review - named by the user, or by the diff's own surface: a destructive path, an archive parser, an `unsafe` block | stays here - carry it into `/task-desktop-review` as review context and state the scope it escalates to, rather than routing it out as a standalone ask |
 | Standalone throughput, UI-responsiveness, allocation, cache, startup-time, or binary-size ask beyond a change review | `desktop-performance-engineer` via `/task-desktop-review-perf`. Perceived slowness with no measured cost - a missing progress indicator, a dead cancel button, an empty state that looks like a hang - stays in `/task-desktop-review`, which owns loading, empty, and error states |
 | Standalone security audit ask - path escape, symlink or junction traversal, TOCTOU on a destructive op, archive extraction, `unsafe` or FFI, dependency advisories, update signing - beyond a change review | `desktop-security-engineer` via `/task-desktop-review-security` |
 | Standalone test strategy, core-crate coverage, filesystem fixtures, migration fixtures, or CI matrix | `desktop-test-engineer` via `/task-desktop-test` |
@@ -61,7 +61,7 @@ When reviewing multiple change sets in a session:
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - refactoring and smell guidance with no diff to review. Bound workflows load their own skills.
+Loaded only when this agent acts with no workflow running - refactoring and smell guidance, or a verdict a routing row orders. Bound workflows load their own skills.
 
 - Use skill: `desktop-core-architecture` for the GUI-free core rule, dependency direction, injection seams, and plan-then-apply shape
 - Use skill: `rust-language-patterns` for ownership, cloning, iterators, newtypes, and AI-generated Rust smells
@@ -69,6 +69,7 @@ Loaded only for this agent's direct mode - refactoring and smell guidance with n
 - Use skill: `iced-architecture-patterns` for message granularity, view-versus-domain state, and a non-blocking `update`
 - Use skill: `desktop-batch-operations` for whether a destructive operation carries its preview and undo
 - Use skill: `desktop-overengineering-review` for the trait with one implementer, `Arc<Mutex<>>` on single-owner data, and a second async runtime
+- Use skill: `desktop-ecosystem-boundaries` to resolve a hard-block verdict named in Routing - this agent resolves it directly, not inside the review
 
 ## Principles
 

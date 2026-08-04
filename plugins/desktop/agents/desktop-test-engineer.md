@@ -50,7 +50,7 @@ Bundled asks: anything actively harming users first, then blocking reviews, then
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - a layering or fixture question with no workflow to run. `/task-desktop-test` loads its own skills.
+Loaded only when this agent acts with no workflow running - a point layering or fixture question, or a verdict a routing row orders. `/task-desktop-test` loads its own skills.
 
 - Use skill: `desktop-core-architecture` for the GUI-free core boundary and the injection seams that make a behaviour provable without a window
 - Use skill: `desktop-batch-operations` for what a destructive-operation test must assert - preview matching apply, undo restoring the tree, a consistent journal after partial failure
@@ -58,6 +58,7 @@ Loaded only for this agent's direct mode - a layering or fixture question with n
 - Use skill: `desktop-data-persistence` for `user_version` migrations and one fixture per shipped schema version
 - Use skill: `desktop-concurrency-patterns` for making parallel work deterministic enough to assert on
 - Use skill: `desktop-build-release` for the CI matrix and what each runner can actually execute
+- Use skill: `desktop-ecosystem-boundaries` to resolve a hard-block verdict named in Routing - this agent resolves it directly, before any test is designed
 
 ## Principle
 

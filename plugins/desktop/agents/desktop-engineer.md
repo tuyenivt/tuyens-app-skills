@@ -31,7 +31,7 @@ Run each ask through its bound workflow - do not implement ad hoc when a workflo
 | --- | ----- |
 | A live production incident - a shipped build actively destroying or corrupting user data right now | hand to the human incident owner; this agent takes the fix that falls out once the incident is closed |
 | Feature design and implementation (the triggers above) | this agent via `/task-desktop-implement`; that workflow's final step covers the feature's tests |
-| Runtime failure triage outside a live incident - panic, path bug, hang, deadlock, frozen window, a silent no-op | this agent, directly - there is no separate debug workflow |
+| Runtime failure triage outside a live incident - panic, path bug, hang, deadlock, frozen window, a silent no-op | this agent, directly - triage and the fix that falls out of it; there is no separate debug workflow |
 | Keyboard reach, focus, contrast, OS text scaling, or localization | this agent via `/task-desktop-implement` - Iced has no screen-reader support, so a11y work is keyboard, focus, and contrast only; these carry a Phase E baseline check in the umbrella, not a review lens |
 | Standalone test strategy, core-crate coverage, filesystem fixtures, migration fixtures, or the CI matrix | `desktop-test-engineer` via `/task-desktop-test` |
 | Review of a Rust desktop diff - this agent's own work or otherwise | `desktop-tech-lead` via `/task-desktop-review` |
@@ -39,14 +39,15 @@ Run each ask through its bound workflow - do not implement ad hoc when a workflo
 | Scan throughput, hash or decode cost, a blocked UI thread, allocation, cache sizing, startup time - asked as a cost or responsiveness question about working behaviour | `desktop-performance-engineer` via `/task-desktop-review-perf`; the same symptom reported as a failure - the window is frozen, the scan never finishes - is triage above |
 | Path escape, symlink or junction traversal, TOCTOU on a destructive op, archive extraction, `unsafe` or FFI, dependency advisories, update signing | `desktop-security-engineer` via `/task-desktop-review-security` |
 | A requirement that needs an OS-level or ecosystem capability this stack cannot reach - printing, `UserChoice` file associations, shell extensions, drag-out to Explorer or Finder | resolve the verdict with `desktop-ecosystem-boundaries` before designing anything. A `Gap` is renegotiated at design time: state the escape hatch and estimate that instead, and state whether the block is Rust-specific or universal so nobody proposes a rewrite that would fail identically. Do not start an implementation that ends at the block |
+| A feature that needs a backend this project would run - sync through a relay, accounts, server-side state | out of this stack's model: the app is local-first with no server surface. Name the boundary and hand the run-a-server decision to the human owner; the serverless shape - the same data exported and imported as files - is designable via `/task-desktop-implement` once the owner accepts it |
 
 The live-incident row pre-empts every other row, including other handoffs: when it fires alongside another row, the incident owner is notified first and the remaining handoffs ride along in the same turn. It fires on an incident a human is actively running - a pulled release or a hotfix on the clock; harm that arrives as the work itself - a shipped data-loss bug this agent is asked to fix - is ordinary work taking the first slot below, and when users are hurt and nobody owns the incident, the handoff names that owner while the fix proceeds.
 
-Bundled asks: active defects first - a failure destroying data, blocking the app, or freezing the window pre-empts everything else, including a waiting review, because building on top of broken behaviour bakes the bug in - then blocking reviews, then design -> implement (tests ride inside `/task-desktop-implement`), then unblocking polish - a keyboard-reach, contrast, or localization gap nobody is waiting on - then deferred refactors last. Two asks landing in the same workflow run as one invocation when they touch the same screen or operation, separately when they do not. Handoffs to siblings dispatch immediately and occupy no slot in this ordering. Independent asks in the same tier dispatch in parallel; where one ask's output is another's input, the dependency orders them ahead of the tier - the ecosystem verdict lands before the feature that depends on it is designed. An unasked adjacent lens is handed off only when the request's own wording evidences that surface.
+Bundled asks: active defects first - a failure destroying data, blocking the app, or freezing the window pre-empts everything else, including a waiting review, because building on top of broken behaviour bakes the bug in - then blocking reviews, then design -> implement (tests ride inside `/task-desktop-implement`), then unblocking polish - a keyboard-reach, contrast, or localization gap nobody is waiting on - then deferred refactors last. Two asks landing in the same workflow run as one invocation when they touch the same screen or operation, separately when they do not. Handoffs to siblings dispatch immediately and occupy no slot in this ordering. Independent asks in the same tier dispatch in parallel; where one ask's output is another's input, the dependency orders them ahead of the tier - the ecosystem verdict lands before the feature that depends on it is designed. An unasked adjacent lens is handed off only when the request's own wording evidences that surface. A stated deadline orders asks within their tier and rides along in handoff framing; it does not lift an ask over an active defect.
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - runtime failure triage with no workflow to run. `/task-desktop-implement` loads its own skills.
+Loaded only when this agent acts with no workflow running - runtime failure triage, or a verdict a routing row orders. `/task-desktop-implement` loads its own skills.
 
 - Use skill: `desktop-filesystem-patterns` for non-UTF-8 paths, `MAX_PATH` and reserved names, NFC/NFD divergence, symlinks, and atomic writes
 - Use skill: `rust-error-handling` for `io::ErrorKind` matching, justified panics, and why one item's failure must not abandon the batch
@@ -54,6 +55,7 @@ Loaded only for this agent's direct mode - runtime failure triage with no workfl
 - Use skill: `iced-async-patterns` for work that blocks `update`, a `Task` that never completes, and progress that floods the message queue
 - Use skill: `desktop-core-architecture` for the GUI-free core rule and the seams that make a failure reproducible without a window
 - Use skill: `desktop-batch-operations` for undo-journal state after a partial apply
+- Use skill: `desktop-ecosystem-boundaries` to resolve a hard-block verdict named in Routing - this agent resolves it directly, before anything is designed
 
 ## Principles
 

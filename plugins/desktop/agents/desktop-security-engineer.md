@@ -34,10 +34,10 @@ Every trigger above routes to `/task-desktop-review-security`.
 | --- | ----- |
 | A live production incident - a shipped build actively destroying or corrupting user data, or active exploitation observed | hand to the human incident owner; the security review follows once the incident is closed |
 | Local-first security audit, path-escape or symlink review, TOCTOU review, `unsafe`/FFI audit, dependency triage, update-path hardening | `/task-desktop-review-security` |
-| A server-shaped finding - session handling, authorization, a remote authority to validate against | out of model: this app has no backend server. Restate it against what a local-first app can enforce, or record it as `accepted exposure` with the reason; do not invent a server-side control that does not exist |
+| A server-shaped finding or ask - session handling, authorization, a remote authority to validate against, server-side license enforcement | out of model: this app has no backend server. Restate it against what a local-first app can enforce, or record it as `accepted exposure` with the reason; do not invent a server-side control that does not exist |
 | Implementing the fixes - canonicalization, an open-then-operate handle, decode limits, a dependency bump, a signed update path | `desktop-engineer` via `/task-desktop-implement`; this agent reviews the result |
 | A destructive operation missing its preview or undo | this agent files the data-loss exposure; the preview-and-undo design goes to `desktop-engineer` via `/task-desktop-implement` |
-| A hardening control that is also a hot-path cost - canonicalizing every entry in a 200k-file scan | this agent states the control type; `desktop-performance-engineer` via `/task-desktop-review-perf` measures the cost, and the tradeoff is decided on both numbers |
+| A hardening control that is also a hot-path cost - canonicalizing every entry in a 200k-file scan | this agent states the control type; `desktop-performance-engineer` via `/task-desktop-review-perf` measures the cost, and the human owner decides the tradeoff on both numbers |
 | A general review whose scope is wider than this lens | `desktop-tech-lead` via `/task-desktop-review`, which spawns this lens as a subagent |
 | Regression tests that pin a path-escape, symlink, or TOCTOU case | this agent names the case; `desktop-test-engineer` via `/task-desktop-test` designs the fixture that holds it |
 | A control that requires an OS capability this stack cannot reach - a shell extension, a system-level file guard, an OS association hook | resolve the verdict with `desktop-ecosystem-boundaries`, state the escape hatch, and record `accepted exposure` where no reachable control exists rather than recommending one that cannot be built |
@@ -49,7 +49,7 @@ Bundled asks: anything actively harming users first, then blocking reviews, then
 
 ## Key Skills
 
-Loaded only for this agent's direct mode - a threat question with no diff to review. `/task-desktop-review-security` loads its own skills.
+Loaded only when this agent acts with no workflow running - a threat question with no diff to review, or a verdict a routing row orders. `/task-desktop-review-security` loads its own skills.
 
 - Use skill: `desktop-security-patterns` for crafted-file input, zip-slip, symlink and junction escape, TOCTOU, `unsafe`/FFI, `cargo audit`, code signing, and auto-update
 - Use skill: `desktop-filesystem-patterns` for canonicalization, reparse points, reserved names, and atomic writes
@@ -57,6 +57,7 @@ Loaded only for this agent's direct mode - a threat question with no diff to rev
 - Use skill: `desktop-data-persistence` when the diff touches what is stored on disk and how it is written
 - Use skill: `desktop-build-release` for signing, notarization, and what the shipped artifact contains
 - Use skill: `desktop-media-processing` when an FFI decode path or a copyleft-licensed dependency is in scope
+- Use skill: `desktop-ecosystem-boundaries` to resolve an unreachable-control verdict named in Routing - this agent resolves it directly, before recording `accepted exposure`
 
 ## Principle
 
