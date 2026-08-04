@@ -50,7 +50,7 @@ status = format!("{} files renamed", n);
 status = fl!(LOADER, "rename-status", count = n);
 ```
 
-Keys are stable and semantic (`dialog.confirm-delete.title`), never the English text and never derived from a position. When a message's meaning changes, change the key - a stale translation of a changed string is worse than an untranslated one.
+Keys are stable, semantic, hyphenated Fluent identifiers (`confirm-delete-title` - a dot is not valid in a Fluent id; it denotes an attribute), never the English text and never derived from a position. When a message's meaning changes, change the key - a stale translation of a changed string is worse than an untranslated one.
 
 Runtime switching is cheap in Iced: the locale lives in state, `view` re-runs on every message, so a `Message::LocaleChanged` that swaps the loader and persists the choice re-renders the whole UI translated. Nothing needs a restart, and requiring one is a defect.
 
@@ -85,8 +85,10 @@ Normalization also changes length: an NFD name can exceed a length limit its NFC
 // Bad - byte order; "Zebra" before "Ähnlich", "ä" after "z", digits ordered as text
 names.sort();
 
-// Good - locale collation, plus numeric ordering so file10 follows file9
-let collator = Collator::try_new(locale.into(), CollatorOptions::default())?;
+// Good - locale collation; numeric ordering is off by default and must be enabled
+let mut prefs = CollatorPreferences::from(&locale);
+prefs.numeric_ordering = Some(CollationNumericOrdering::True);
+let collator = Collator::try_new(prefs, CollatorOptions::default())?;
 names.sort_by(|a, b| collator.compare(a, b));
 ```
 

@@ -158,12 +158,14 @@ Returning an `Action` type rather than a `Task` lets the child report what the p
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Category: <blocking-update | state-placement | message-granularity | view-purity | subscription-vs-task | component-split | version-unverified>
 Issue: <the defect, named>
 Consequence: <what the user sees or what drifts - "window frozen for the scan's duration", "core type carries a disclosure flag">
 Fix: <the concrete change>
 ```
+
+`[Must]` for blocking-update and view-purity findings, and for a message payload that cannot compile as stated (borrowed or non-`Clone`). `[Recommend]` otherwise.
 
 A defect the scope note assigns to another skill (crate placement, widget construction and lists, `Task` internals, long-job execution) is not filed under a category. It is returned as one line instead, so the observation survives:
 

@@ -145,12 +145,14 @@ Model these as one enum rather than a set of independent booleans, so impossible
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Category: <virtualization | table-widget | element-lifetime | custom-widget | styling | keyboard-focus | colour-only-signal | missing-state | per-frame-work>
 Issue: <the defect, named>
 Consequence: <what the user sees - "UI locks for ~8s on a 100k-row result", "unreadable in dark theme">
 Fix: <the concrete change>
 ```
+
+`[Must]` when the consequence is a freeze or lockup, a blank pane on a reachable state, an interactive control with no keyboard path, or text unreadable under a shipped theme. `[Recommend]` otherwise.
 
 When designing a view rather than reviewing:
 
@@ -167,6 +169,8 @@ Styling: <theme-derived | hardcoded values, and why>
 Any signature stated for an Iced widget carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two.
 
 When asked for guidance with no code supplied, answer in the design format with `Iced version: UNRESOLVED`, fill every slot the request allows, and name the view files needed to go further - never emit `file:line` findings against code that was not shown.
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 ## Avoid
 

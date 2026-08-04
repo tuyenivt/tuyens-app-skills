@@ -127,12 +127,16 @@ Check this at startup, not at first dispatch. Discovering an unavailable feature
 Per finding:
 
 ```
-[Must | Recommend] {file:line}
+[Must | Recommend] {file:line | Cargo.toml | symbol, when source was supplied without paths | symptom, when no source was supplied}
 Area: {Version Coupling | Device Ownership | Dispatch Shape | Transfer Cost | Fallback Path}
 Issue: {the defect, named}
 Evidence: {the measurement, the `cargo tree -d` result, or the API constraint}
 Fix: {concrete edit}
 ```
+
+`[Must]` for Version Coupling, Device Ownership, and an untested Fallback Path - broken compiles, startup panics, and a fallback that has never run are ship-blocking. Dispatch Shape and Transfer Cost escalate to `[Must]` only with a measurement cited in `Evidence`; `[Recommend]` otherwise.
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 When assessing whether a workload belongs on the GPU rather than reviewing code, produce instead:
 

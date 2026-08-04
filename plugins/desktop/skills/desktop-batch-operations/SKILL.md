@@ -152,12 +152,18 @@ For delete specifically, prefer the OS recycle bin (`trash` crate) over `fs::rem
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Operation: <rename | move | delete | overwrite | copy>
-Gap: <preview | undo | intra-batch collision | case-insensitive collision | rename cycle | partial-failure reporting | journal accuracy | journal durability | suffix rule>
+Gap: <preview | undo | preview-apply drift | apply-time revalidation | intra-batch collision | case-insensitive collision | rename cycle | partial-failure reporting | journal accuracy | journal durability | suffix rule>
 Consequence: <what the user loses, concretely>
 Fix: <the concrete change>
 ```
+
+`[Must]` when the consequence is lost, overwritten, or unrecoverable user data - most findings here are. `[Recommend]` when the defect costs clarity or convention (suffix wording, report formatting) without risking data.
+
+A destructive operation reviewed with no findings closes with exactly `No batch-operation findings.` A request about a read-only operation closes with exactly `Not applicable: operation is not destructive.` and nothing else - do not invent preview or undo requirements for it.
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 When designing rather than reviewing:
 

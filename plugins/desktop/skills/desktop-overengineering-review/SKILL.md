@@ -181,7 +181,7 @@ Justified when a build profile, a platform split, or an optional dependency back
 One block per finding; the consuming workflow merges them:
 
 ```
-### [Must | Recommend] {file:line | symptom, when no source was supplied}
+### [Must | Recommend] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {Type-System Ceremony | Premature Concurrency | Speculative Performance | Structural Excess | Absent Structure}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}

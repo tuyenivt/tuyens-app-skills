@@ -130,7 +130,7 @@ In a single-crate app with logic inline in `update()`, scope the fix to the feat
 When this skill produces a finding, each carries:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Boundary: <core -> UI | UI -> core | within core | within UI>
 Issue: <the violation, named>
 Why it matters: <what becomes untestable, or what will drift>
@@ -138,6 +138,10 @@ Fix: <the concrete move or signature change>
 ```
 
 `core -> UI` covers any dependency from core toward the UI side, including a GUI-framework crate in the core manifest.
+
+`[Must]` when the boundary is breached mechanically (a GUI crate in core's manifest, core importing a UI type) or when preview and apply compute the plan in two places. `[Recommend]` for seams, type placement, and structure.
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 When designing a new layout or assessing an existing one, rather than reviewing a diff, produce instead:
 

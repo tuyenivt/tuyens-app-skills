@@ -150,12 +150,14 @@ For this app class, `unsafe` is justified in roughly three places: a documented 
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Category: <ownership | borrowing | clone | iterator | newtype | cow | generics | unsafe | api-signature>
 Issue: <the defect, named>
 Why it matters: <the concrete cost - allocation per item, lost parallelism, a swap the compiler cannot catch>
 Fix: <the concrete signature or restructure>
 ```
+
+A defect owned by a sibling named in the ownership blockquote (an `unwrap` policy question, a `Send`/`Sync` question, a crate-placement question) is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 When designing an API or a type rather than reviewing:
 

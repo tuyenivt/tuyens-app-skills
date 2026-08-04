@@ -70,7 +70,7 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 Accept the project shape from the parent when invoked as a subagent. Otherwise read `Cargo.toml`; if it is absent, stop - this workflow reviews Rust projects only.
 
-Record the pinned Iced version, the async runtime, whether `rayon` is present, and the release profile settings (`opt-level`, `lto`, `codegen-units`, `debug-assertions`). A release profile with `opt-level = 0` or `debug-assertions = true` changes every cost claim in this review; state it if found. The parent's shape does not carry the release profile: in subagent mode read it from `Cargo.toml` directly - a file read, not git - and state a distorting profile inside the Evidence line of each finding it affects.
+Record the resolved Iced version (from the parent's shape as a subagent; from `Cargo.lock` standalone - the manifest holds a range under this project's track-latest policy), the async runtime, whether `rayon` is present, and the release profile settings (`opt-level`, `lto`, `codegen-units`, `debug-assertions`). A release profile with `opt-level = 0` or `debug-assertions = true` changes every cost claim in this review; state it if found. The parent's shape does not carry the release profile: in subagent mode read it from `Cargo.toml` directly - a file read, not git - and state a distorting profile inside the Evidence line of each finding it affects.
 
 ### Step 3 - Resolve the Change Set
 
@@ -138,7 +138,7 @@ Use skill: `rust-language-patterns` for the mechanics. Check:
 
 Use skill: `desktop-concurrency-patterns`. Check parallelism actually helps: a `rayon` pool over an I/O-bound walk can be slower than a sequential one on a single spinning disk, and thread-per-item is a defect at any scale. Check backpressure - an unbounded channel from a fast producer to a slow consumer is a memory defect.
 
-Check startup cost: work done before the first frame is the most visible latency the app has. A scan, a migration, or a cache warm on the startup path belongs behind the first paint.
+Check startup cost: work done before the first frame is the most visible latency the app has. A scan, a migration, or a cache warm on the startup path belongs behind the first paint. A startup-path finding's budget is UI responsiveness - first-paint delay is perceived responsiveness, not throughput.
 
 **Windows GPU startup.** wgpu may find no adapter under a VM, and defaults to the low-power iGPU on hybrid laptops. Iced's backend configuration is environment-variable-only, so a change that assumes a discrete GPU or a specific backend without a `tiny-skia` fallback path is a finding.
 
@@ -206,7 +206,7 @@ The fence below delimits the template for display only. Emit the report body as 
 
 ## Next Steps
 
-[Standalone only - the parent owns this when invoked as a subagent]
+[Standalone only - the parent owns this section in subagent mode. One numbered line per finding, `[Must]` before `[Recommend]`, each as `<label> file:line - <action>`. Recommendations orders fixes by payoff; Next Steps is the execution order]
 ```
 
 **Omit empty sections.** No High Impact heading if there are none.

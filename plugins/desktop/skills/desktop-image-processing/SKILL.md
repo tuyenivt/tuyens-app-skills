@@ -34,21 +34,21 @@ user-invocable: false
 
 ### Decode at the size you need
 
-`image` 0.25 exposes JPEG DCT scaling and per-format hints through `ImageReader`. For JPEG the decoder can emit 1/2, 1/4, or 1/8 scale directly from the DCT coefficients, which skips most of the work rather than doing it and throwing it away.
-
 ```rust
-// Bad - 72 MB allocated and fully decoded to produce a 200px thumbnail
+// Bad - 72 MB allocated and fully decoded to produce a 200px thumbnail,
+// with no limits against a hostile header
 let img = image::open(path)?;
 let thumb = img.thumbnail(200, 200);
 
-// Good - the decoder is told the target; JPEG scales during decode
-let mut reader = ImageReader::open(path)?.with_guessed_format()?;
-reader.no_limits();                             // only after validating the source
+// Good - limits capped before any pixel is allocated
+let reader = ImageReader::open(path)?.with_guessed_format()?;
 let mut decoder = reader.into_decoder()?;
 decoder.set_limits(limits_for_thumbnails())?;   // cap width, height, and alloc
 let img = DynamicImage::from_decoder(decoder)?;
 let thumb = img.thumbnail(200, 200);            // preserves aspect; `resize_exact` does not
 ```
+
+Where the pinned `image` version exposes reduced-scale decode for a format (JPEG can emit 1/2, 1/4, or 1/8 scale directly from the DCT coefficients), request the smallest scale at or above the target before decoding - that skips most of the work rather than doing it and throwing it away. The API for this has moved across `image` versions and decoder backends; verify it exists in the resolved version's docs before relying on it, and fall back to decode-with-limits-then-thumbnail when it does not.
 
 Set decoder limits on any file the user did not author. An untrusted image declaring 65535x65535 will happily attempt a 17 GB allocation (`desktop-security-patterns`).
 

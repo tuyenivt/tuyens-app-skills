@@ -104,13 +104,19 @@ Cancellation is not failure. It returns `Outcome::Cancelled { completed: n }` so
 // Bad - one message per file; the UI event loop never drains the queue
 for p in &paths { hash(p); tx.send(Progress::Item(p.clone()))?; }
 
-// Good - coalesce on a time interval; the UI redraws at most ~20x/sec anyway
-let mut last = Instant::now();
+// Good - coalesce on a time interval; the UI redraws at most ~20x/sec anyway.
+// The last-sent time is an atomic: workers race to claim the send, losers skip it.
+let t0 = Instant::now();
 let done = AtomicUsize::new(0);
+let last_sent_ms = AtomicU64::new(0);
 paths.par_iter().for_each(|p| {
     hash(p);
     let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-    if last.elapsed() >= Duration::from_millis(50) { let _ = tx.try_send(Progress::Count(n)); }
+    let now = t0.elapsed().as_millis() as u64;
+    let prev = last_sent_ms.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) >= 50
+        && last_sent_ms.compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed).is_ok()
+    { let _ = tx.try_send(Progress::Count(n)); }
 });
 ```
 

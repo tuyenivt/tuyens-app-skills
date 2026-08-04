@@ -123,7 +123,7 @@ A spike that has not produced a running binary on a clean machine has not de-ris
 Per finding:
 
 ```
-[Must | Recommend] {file:line | Cargo.toml}
+[Must | Recommend] {file:line | Cargo.toml | symbol, when source was supplied without paths}
 Area: {Licensing | Codec Coverage | Binding Longevity | Build Environment | Runtime Failure}
 Issue: {the defect, named}
 Exposure: {for Licensing: the obligation triggered and who it binds; otherwise the user-visible failure}
@@ -131,6 +131,8 @@ Fix: {concrete manifest, trait, or packaging edit}
 ```
 
 `Area: Licensing` findings are always `[Must]`. No other area is escalated without a measurement or a reproduced failure.
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none. A review that produces no finding closes with exactly `No media findings.`
 
 When scoping a media feature rather than reviewing code, produce instead:
 

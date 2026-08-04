@@ -62,10 +62,12 @@ Stage changes with `git add <path>`, or drop --staged to review the working tree
 ```
 
 ```text
-Nothing to review. The working tree is clean and HEAD has no parent commit to compare against.
+Nothing to review. The repository has no commits and the working tree is clean.
 
-Make a change, or pass an explicit commit range.
+Make a change first.
 ```
+
+A clean tree whose only commit is the initial one is not a stop: `last-commit` mode proceeds via the empty-tree diff from Scope Modes.
 
 ### Step 3 - Partition the change set
 
@@ -87,7 +89,7 @@ If non-empty, add a note: `<N> stash entr(y|ies) present - not included in this 
 
 ### Step 5 - Report scale
 
-Count `reviewable` paths and total changed lines against the handle's `base` (`git diff HEAD --shortstat` for working-tree, `git diff --cached --shortstat` for staged-only, `git diff --shortstat HEAD~1..HEAD` for last-commit), plus untracked file line counts. Record both in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
+Count `reviewable` paths and their changed lines against the handle's `base`, limiting the diff to reviewable paths (`git diff HEAD --shortstat -- <reviewable paths>` for working-tree, `git diff --cached --shortstat -- <reviewable paths>` for staged-only, `git diff --shortstat HEAD~1..HEAD -- <reviewable paths>` for last-commit), plus line counts of untracked `reviewable` files. `changed_lines` therefore excludes binary and generated paths - a churned lockfile must not inflate the effort signal. Record both counts in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
 
 ## Output Format
 

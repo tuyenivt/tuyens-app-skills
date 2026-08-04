@@ -135,6 +135,7 @@ Every byte from a file the user did not author is attacker-controlled.
 - Parsed metadata (EXIF, ID3, tags) trusted for a filesystem operation - a filename derived from file-supplied metadata is user-controlled input reaching a path
 - Deserialization of a persisted or downloaded structure without size or shape limits
 - Integer overflow in a size or offset computation derived from file content
+- A file-supplied string - a filename, a tag, parsed metadata - concatenated into SQL against the local store: parameterize. The adversary is the crafted file, not the user, so this stays in scope despite the server-import exclusion
 
 ### Step 8 - `unsafe`, FFI, and Process Boundaries
 
@@ -224,7 +225,7 @@ The fence below delimits the template for display only. Emit the report body as 
 
 ## Next Steps
 
-[Standalone only - the parent owns this when invoked as a subagent]
+[Standalone only - the parent owns this section in subagent mode. One numbered line per finding, `[Must]` before `[Recommend]`, each as `<label> file:line - <action>`]
 ```
 
 **Omit empty sections** other than `Dependency Triage` and `Reviewed, Not Filed`, which are always written - `none` is itself the useful signal.
@@ -252,7 +253,7 @@ The fence below delimits the template for display only. Emit the report body as 
 - Writing a report when invoked as a subagent - the parent owns it
 - Returning the whole Output Format as a subagent - only `## Findings`, `## Dependency Triage`, `## Reviewed, Not Filed`, and the deep-only audit are returned
 - Treating the user as the adversary - the app already runs with their privileges
-- Server threat model imports: session fixation, CSRF, SQL injection against a local single-user SQLite file, rate limiting
+- Server threat model imports: session fixation, CSRF, rate limiting, SQL injection that models the user as the adversary - a file-supplied string reaching SQL is Step 7 untrusted input and stays in scope
 - Filing "the config file is user-editable" as a finding
 - Claiming `prevented` for a TOCTOU narrowing that only shrinks the window
 - Filing a hardcoded user-facing string as a security finding unless the string is a secret

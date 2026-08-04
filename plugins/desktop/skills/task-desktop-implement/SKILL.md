@@ -29,7 +29,7 @@ It does apply when presentation work also adds behaviour, locales, or persistenc
 - Filesystem paths are `Path`/`PathBuf` and `OsStr`, never `String` - a path is not required to be UTF-8 on either target
 - Every fallible operation in a batch reports its own outcome; one failure does not abandon the remaining items or silently succeed
 - User-facing strings resolve through a localization key. Where the project has no localization system, keep every string in one module so extraction is mechanical, and report that at STEP 5 as a stated deviation rather than installing a localization system this feature did not ask for
-- Any persisted-shape change ships a schema version bump and a migration, because installed users have existing databases
+- A shape change to a versioned store ships a schema version bump and a migration, because installed users have existing databases. An additive settings-file field absorbed by `#[serde(default)]` needs neither - record it as absorbed in Persistence Impact
 - A capability listed as a Gap in `desktop-ecosystem-boundaries` is designed around at STEP 2, not discovered at STEP 5
 - Each step completes before the next; design approved before code
 
@@ -48,7 +48,7 @@ Then confirm:
 | Concern | Confirm | If it differs |
 | --- | --- | --- |
 | Core split | A crate with no `iced` in its `Cargo.toml` | **None anywhere, or the existing one depends on `iced`: report at STEP 2 as the blocking design finding.** Do not build logic into the UI crate around it |
-| Iced version | Pinned, and matching this plugin's guidance | State the detected version; where it differs, verify each API against the project's version and say that you did |
+| Iced version | Resolved from `Cargo.lock`, matching this plugin's guidance | State the resolved version; where it differs, verify each API against it and say that you did |
 | Async runtime | Iced's executor, or an explicit `tokio`/`smol` choice | State which; do not introduce a second runtime |
 | Persistence | `rusqlite`, or a stated alternative | `sled`: report at STEP 6 as a finding - it is unmaintained, 0.34.7 dates to 2021 |
 | Platform targets | Windows primary, macOS secondary | A Linux-only or macOS-primary project: state the mismatch and which guidance still applies |
@@ -100,7 +100,7 @@ Present the plan:
 
 Where the design deviates from this skill's defaults (logic in the UI crate, `unsafe`, a blocking call in `update`, a second async runtime), call out the deviation with its reason so the approver sees the choice rather than discovering it in review.
 
-Wait for approval.
+Wait for approval. When the invocation itself granted approval up front ("proceed without asking"), present the plan, treat that grant as the approval, and record every question it left unanswered in Open Assumptions.
 
 ### STEP 3 - CORE
 
@@ -208,8 +208,8 @@ API claims verified against: {version}
 - Cancellation: {how it propagates, or `none - operation is not cancellable, with the reason`}
 
 ## Persistence Impact
-- Schema version: {old, or `none - no existing store`} -> {new, or `unchanged - no shape change`}
-- Migration: {step, or `none - no shape change`}
+- Schema version: {old, or `none - no versioned store`} -> {new, or `unchanged - no shape change`}
+- Migration: {step | `absorbed - additive settings field with serde default` | `none - no shape change`}
 - Location: {per-platform path, or `n/a - nothing persisted`}
 
 ## Platform Capabilities
@@ -258,7 +258,7 @@ Every slot above is written. A step that did not run is written as `skipped - {r
 - [ ] Keyboard navigation, focus order, contrast, and text scaling present
 - [ ] User-facing strings behind localization keys, or held in one module with the deviation stated
 - [ ] Deviations and accepted exposure written in the report, `none` / `n/a` where there are none
-- [ ] Persisted-shape change ships a version bump and a migration
+- [ ] Versioned-store shape change ships a version bump and a migration; a default-absorbed settings field is recorded as absorbed
 - [ ] Gap capabilities designed around at STEP 2, never implemented as if they work
 - [ ] Packaging prerequisite stated where a silent-failure capability depends on it
 - [ ] Unit tests cover the core; no test touches the user's real files
@@ -278,9 +278,9 @@ Every slot above is written. A step that did not run is written as `skipped - {r
 - Decoding thumbnails on the UI thread, or caching them without eviction
 - Colour as the only carrier of a result-relevant distinction
 - Hardcoded user-facing strings
-- A persisted-shape change with no version bump or migration
+- A versioned-store shape change with no version bump or migration
 - Introducing a second async runtime alongside Iced's executor
 - Planning a feature on a capability listed as a Gap
-- Claiming an Iced API from memory rather than the project's pinned version
+- Claiming an Iced API from memory rather than the project's resolved version
 - Writing code before design approval
 - Reporting a clean run without executing the STEP 8 commands

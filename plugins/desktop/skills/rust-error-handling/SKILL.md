@@ -37,9 +37,10 @@ user-invocable: false
 // core/src/error.rs - variants the UI can branch on
 #[derive(Debug, thiserror::Error)]
 pub enum ScanError {
-    #[error("cannot read {path}: {source}")]
+    // PathBuf has no Display impl - interpolate via `.display()`, not `{path}`
+    #[error("cannot read {}: {source}", path.display())]
     Read { path: PathBuf, #[source] source: std::io::Error },
-    #[error("{path} is outside the selected root")]
+    #[error("{} is outside the selected root", path.display())]
     OutsideRoot { path: PathBuf },
 }
 ```
@@ -147,12 +148,14 @@ Build this by keeping the path in the error type and mapping `ErrorKind` to the 
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Category: <error-type-choice | unwrap-on-fallible | panic-message | partial-failure | thread-boundary | errorkind-matching | user-message | context-loss>
 Issue: <the defect, named>
 Consequence: <what the user or caller loses - "the batch aborts at the first locked file", "the UI cannot distinguish missing from denied">
 Fix: <the concrete type or call change>
 ```
+
+A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 When designing an error path rather than reviewing:
 

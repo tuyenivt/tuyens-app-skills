@@ -92,11 +92,11 @@ Use skill: `behavioral-principles`. Accept parent's confirmation if invoked as s
 
 Read `Cargo.toml`. If it is absent, stop - this workflow reviews Rust projects only.
 
-Record: the workspace layout, whether a GUI-free core crate exists, the pinned Iced version, the async runtime, the persistence crate, and the packaging tool.
+Record: the workspace layout, whether a GUI-free core crate exists, the resolved Iced version, the async runtime, the persistence crate, and the packaging tool.
 
 **Iced version.** Read the **resolved** version from `Cargo.lock` and record it. This project tracks latest rather than pinning a minor, so `Cargo.toml` holds a range and only the lockfile identifies what actually builds. Iced is pre-1.0 and its API moves between minor releases, so **a finding resting on Iced API surface names the version it assumes**. Where the resolved version differs from this plugin's guidance, note in Summary: `Detected iced <version>; this plugin's guidance targets 0.14.x - version-specific findings are annotated.` and review rather than stopping. Reduced confidence is concrete, not an adjective: no finding is downgraded on version grounds alone.
 
-**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check that the change compiles against the new version's API rather than the old one, and that any behaviour the release notes changed is accounted for. A defect found this way is filed as a Phase B finding, so it survives the low-risk short-circuit.
+**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check the change's API usage by reading it against the new version's surface rather than the old one - a read check, no build is run - and that any behaviour the release notes changed is accounted for. A defect found this way is filed as a Phase B finding, so it survives the low-risk short-circuit.
 
 **No GUI-free core.** If the workspace has no core crate, or the existing one depends on `iced`, note it once in Summary and treat it as the standing architectural condition Phase C reports against. Do not re-raise it per file.
 
@@ -128,7 +128,7 @@ Scan file list / diff for signals listed under **Scope**, ignoring excluded surf
 
 **Scope precedence:** user flag > firing signals.
 
-Surface decision in Summary; if escalated, append `auto-escalated from Core; signals: <list>`.
+Surface decision in Summary; if escalated, append `auto-escalated from Core; signals: <list>`. When signals fired without escalating (improving direction, or suppressed by `core-only`), append `signals logged, not escalated: <list>` - a reader must be able to tell a signal-free diff from one whose escalation was declined.
 
 ### Phase A - Risk Snapshot
 
@@ -229,7 +229,7 @@ Skip if scope is **Core only**. For each selected scope, spawn one independent s
 
 - The `review-precondition-check` handle (`mode`, `base`, `current_branch`, `reviewable`, `counts`, `notes`) + the pre-read diff (no re-running git)
 - Depth level - the parent's resolved depth, which overrides the lens's own depth table. A lens invoked at `deep` returns its deep-only section even where its own trigger did not fire
-- Pre-confirmed stack (Rust) + the pinned Iced version, workspace layout, core-crate presence, async runtime, and persistence crate
+- Pre-confirmed stack (Rust) + the resolved Iced version, workspace layout, core-crate presence, async runtime, and persistence crate
 - The reviewable-surface table above
 - Return only the lens's subagent sections, per its own Step 11 contract: `## Findings` plus its non-finding and deep-only sections - never the full report template
 
@@ -242,6 +242,7 @@ Merge subagent findings into single Output Format. Do not append raw reports.
 - Deduplicate cross-cutting findings (one entry citing all scopes)
 - **Strongest intent wins** when labels differ across subagent reports for the same finding: `Must` > `Recommend`
 - Preserve `file:line` citations
+- Map lens fields into the umbrella finding shape: a lens's Cost or Consequence line becomes Impact, its Budget or Adversary line becomes System Risk; Control type / Evidence is carried verbatim
 - Order by intent, not scope
 - Note missing scopes as `Scope incomplete: <scope>`
 - Build Next Steps from the per-finding intent the subagents return - subagents return no Next Steps of their own; tag `[Implement]` / `[Delegate]`, re-sort by intent
@@ -304,7 +305,7 @@ The fence below delimits the template for display only - it is not part of the r
 **Async Runtime:** iced executor | tokio | smol | none
 **Persistence:** <crate> | none
 **Packaging:** <tool> | none
-**Scope:** Core | +Sec | +Perf | Full _(if auto-escalated: `auto-escalated from Core; signals: <list>`)_
+**Scope:** Core | +Sec | +Perf | Full _(if auto-escalated: `auto-escalated from Core; signals: <list>`; if signals fired without escalating: `signals logged, not escalated: <list>`)_
 **Depth:** standard | deep _(if auto-promoted: `auto-promoted from standard; Risk: <level>`)_
 **Files:** `<N> reviewable` _(add `; <M> reviewed - <what was excluded>` only when the two differ)_
 **Unattributed:** <carried from the +Perf lens's `## Unattributed`> _(omit when no lens returned one)_
@@ -376,7 +377,7 @@ _Non-finding sections returned by lens subagents - deep-only analysis, +Sec's `D
 - [ ] Missing or `iced`-dependent core crate surfaced once in Summary, not re-raised per file
 - [ ] Step 3 - `review-precondition-check` ran (or handle received); `git diff <base>` read once and reused; analysis restricted to the handle's `reviewable` paths
 - [ ] Build output excluded from findings and signal scanning; `Cargo.toml`/`Cargo.lock` treated as review surface; reviewed count stated in Summary where it differs from the handle's `files`
-- [ ] Step 4 - scope auto-escalation evaluated; promotion (or `core-only`) recorded
+- [ ] Step 4 - scope auto-escalation evaluated; promotion (or `core-only`) recorded; fired-but-not-escalated signals surfaced in Summary
 - [ ] Step 5 - depth auto-promoted to `deep` when Risk is High/Critical
 - [ ] Risk stated before any finding; a destructive-apply-path change never rated Low
 - [ ] Phase B: atomic skills applied; test coverage, destructive preview/undo, panic paths, path handling, UI-thread blocking, `unsafe` justification, partial-batch reporting, secrets, untrusted input, migration checked

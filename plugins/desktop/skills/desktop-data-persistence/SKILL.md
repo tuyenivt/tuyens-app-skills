@@ -59,16 +59,23 @@ Without `bundled`, the build links the system SQLite, which does not exist on a 
 // version file runs the wrong migrations against the wrong schema
 let v: u32 = fs::read_to_string(dir.join("schema_version"))?.parse()?;
 
-// Good - the version travels inside the file it describes
-fn migrate(conn: &Connection) -> Result<()> {
+// Good - the version travels inside the file it describes, and each step is one
+// transaction: schema change and version bump commit together or not at all
+fn migrate(conn: &mut Connection) -> Result<()> {
     let v: u32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if v == 0 { conn.execute_batch(V1)?; conn.pragma_update(None, "user_version", 1)?; }
-    if v <= 1 { conn.execute_batch(V2)?; conn.pragma_update(None, "user_version", 2)?; }
+    if v == 0 { step(conn, V1, 1)?; }
+    if v <= 1 { step(conn, V2, 2)?; }
     Ok(())
+}
+fn step(conn: &mut Connection, sql: &str, to: u32) -> Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute_batch(sql)?;
+    tx.pragma_update(None, "user_version", to)?;
+    tx.commit()
 }
 ```
 
-Each step runs in a transaction, so a failed migration leaves the database at its previous version rather than half-upgraded. Migrations are **forward-only**: a downgrade path doubles the test matrix to serve a case a desktop utility does not have, since the user does not install an older version over a newer one.
+A failed migration therefore leaves the database at its previous version rather than half-upgraded - a version bump outside the step's transaction re-runs a completed step after a crash. Migrations are **forward-only**: a downgrade path doubles the test matrix to serve a case a desktop utility does not have, since the user does not install an older version over a newer one.
 
 Refuse to open a database whose `user_version` exceeds the versions the binary knows. That is a newer app's file, and running old code against it corrupts it.
 
@@ -171,7 +178,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 `Severity: {Critical | High | Medium | Low}` - Critical = user data lost or corrupted on upgrade, or a store that cannot be opened. High = stale results presented as current, a startup failure on an existing config, or a hardcoded path wrong on a target platform. Medium = a defect on an uncommon upgrade or platform path. Low = hygiene with no observed symptom.
 
-`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block.
+`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block. Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`.
 
 A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 

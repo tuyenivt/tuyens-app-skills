@@ -130,12 +130,14 @@ A file watcher, a global keyboard hook, or a timer is a `Subscription`: it produ
 When this skill produces a finding:
 
 ```
-[Must|Recommend] <file:line>
+[Must|Recommend] {file:line | symbol, when source was supplied without paths}
 Category: <blocking-executor | second-runtime | missing-cancellation | cancel-granularity | stale-job | progress-flooding | backpressure | rayon-bridge | subscription-identity>
 Issue: <the defect, named>
 Consequence: <what the user experiences - "Cancel does nothing until the current 4 GB file finishes", "results from a superseded scan replace the current ones">
 Fix: <the concrete change>
 ```
+
+`[Must]` for blocking-executor, second-runtime, stale-job, and missing-cancellation findings - freezes, wrong results, and a dead Cancel are user-visible breakage. `[Recommend]` otherwise.
 
 When designing an async path rather than reviewing:
 

@@ -40,7 +40,7 @@ Use skill: `behavioral-principles`.
 
 ### Step 2 - Project Gate and Shape
 
-Read `Cargo.toml`. If it is absent, stop - this workflow covers Rust projects only. Record the workspace layout, whether a GUI-free core crate exists, the test dependencies already present (`tempfile`, `proptest`, `insta`, `rstest`, `criterion`), and the CI configuration if any.
+Read `Cargo.toml`. If it is absent, stop - this workflow covers Rust projects only. Record the workspace layout, whether the workspace resolves `iced` (the guidance assumes an Iced desktop app; where it does not, state that and keep only the plain-Rust surfaces the request names), whether a GUI-free core crate exists, the test dependencies already present (`tempfile`, `proptest`, `insta`, `rstest`, `criterion`), and the CI configuration if any.
 
 Record the request's scope: whole-project (a strategy or coverage assessment) or targeted (a named operation or module). A targeted request runs Steps 3-8 against the named surface only, and Step 9 only when the request includes CI; out-of-scope report sections are written `n/a - outside the request's scope`.
 
@@ -139,17 +139,18 @@ strategy:
 
 Per job: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`, and a release build. Add `cargo audit` on a schedule rather than per push.
 
-Two practical notes: macOS runners bill at a 10x multiplier on private repos and are free on public ones, so a private-repo matrix that runs macOS on every push burns the allowance quickly. And `aws-lc-rs` needs CMake and NASM on Windows - a CI job failing at link time on Windows and nowhere else is usually this.
+Two practical notes: macOS runners bill at a 10x multiplier on private repos and are free on public ones, so a private-repo matrix that runs macOS on every push burns the allowance quickly - gate the macOS leg there by building the `os` list conditionally (`fromJSON` on `github.ref`) or splitting macOS into its own job with an `if:` on the default branch. And `aws-lc-rs` needs CMake and NASM on Windows - a CI job failing at link time on Windows and nowhere else is usually this.
 
 ### Step 10 - Report
 
-Write the strategy. Write scaffolds when the request asked for tests to be written; a strategy or assessment question gets the plan and no unrequested files. Scaffolds are runnable test functions with real assertions, not `todo!()` stubs - a stub that compiles gives false coverage confidence.
+Write the strategy. Write scaffolds when the request asked for tests to be written; a strategy or assessment question gets the plan and no unrequested files. Scaffolds are runnable test functions with real assertions, not `todo!()` stubs - a stub that compiles gives false coverage confidence. Plan-level unit scaffolds live in `#[cfg(test)]` modules beside the code they cover; tempdir-backed and cross-crate suites live in the crate's `tests/` directory.
 
 ## Output Format
 
 ```markdown
 ## Project Shape
 - Workspace: {layout}
+- Iced app: {yes | no - stated, desktop-specific guidance dropped}
 - Core crate: {name | none - primary finding | depends on iced - primary finding}
 - Test dependencies present: {list | none}
 - CI: {configured | absent}
