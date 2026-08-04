@@ -127,7 +127,7 @@ A file watcher, a global keyboard hook, or a timer is a `Subscription`: it produ
 
 ## Output Format
 
-When this skill produces a finding:
+When this skill produces a finding, emit one block per finding, `[Must]` first:
 
 ```
 [Must|Recommend] {file:line | symbol, when source was supplied without paths}
@@ -137,7 +137,11 @@ Consequence: <what the user experiences - "Cancel does nothing until the current
 Fix: <the concrete change>
 ```
 
-`[Must]` for blocking-executor, second-runtime, stale-job, and missing-cancellation findings - freezes, wrong results, and a dead Cancel are user-visible breakage. `[Recommend]` otherwise.
+`[Must]` for blocking-executor, second-runtime, stale-job, and missing-cancellation findings - freezes, wrong results, and a dead Cancel are user-visible breakage. `[Recommend]` otherwise. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Consequence`.
+
+A defect - or, in design mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the design form as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
+
+Close review output with one line, `Iced version: {the resolved version from Cargo.lock | unresolved - every signature above is UNVERIFIED}`, so the version check is visibly done.
 
 When designing an async path rather than reviewing:
 
@@ -152,9 +156,9 @@ Backpressure: <bounded channel with capacity | producer-side aggregation>
 Executor: <Iced's only - no second runtime>
 ```
 
-Any signature stated for an Iced async API carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two.
+Any signature stated for an Iced async API carries `verified against <version>` or `UNVERIFIED - confirm against the pinned version`. No Iced signature is asserted without one of the two; confirming that a helper exists without retrieving its full signature is still `UNVERIFIED`. `Iced version: UNRESOLVED` does not block producing the design - every Iced API in it is then tagged `UNVERIFIED`, and implementation waits for the lock file.
 
-When a symptom is reported without source ("the app freezes when I scan"), never emit `file:line` findings against code that was not shown. Name the candidate causes in likelihood order - blocking work in `update`, `block_on` on the UI path, CPU-bound work occupying the executor, one message per item flooding the queue - and request the `update` arm that starts the job, the worker code, and `Cargo.lock` before filing findings.
+When a symptom is reported without source ("the app freezes when I scan"), never emit `file:line` findings against code that was not shown. Name the candidate causes for each reported symptom in likelihood order - for a freeze: blocking work in `update`, `block_on` on the UI path, CPU-bound work occupying the executor, one message per item flooding the queue - and request the `update` arm that starts the job, the worker code, and `Cargo.lock` before filing findings.
 
 ## Avoid
 

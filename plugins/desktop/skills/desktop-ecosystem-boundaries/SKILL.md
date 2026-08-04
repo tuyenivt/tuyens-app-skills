@@ -22,7 +22,7 @@ user-invocable: false
 ## Rules
 
 - **A capability with `Verdict: Gap` is not planned around, scheduled, or estimated.** It is either dropped from scope or replaced by its escape hatch, and the escape hatch is what gets estimated
-- Every Gap verdict states whether the block is **Rust-specific** or **universal**. `UserChoice` file associations are impossible for every stack including C# and C++; saying "Rust can't" invites a rewrite that would also fail
+- Every Gap verdict states whether the block is **Rust-specific**, **universal**, or **crate-dead**. `UserChoice` file associations are impossible for every stack including C# and C++; saying "Rust can't" invites a rewrite that would also fail. A crate-dead Gap blocks only the named crate - the capability stays reachable via the replacement in its escape hatch
 - **Silent-failure traps are prerequisites, not polish.** Notifications, Keychain, and GPU selection each depend on packaging, signing, or process-start environment that no amount of application code substitutes for. Schedule them before the feature they gate, never after
 - A crate whose last release predates the current year by more than two years is Gap regardless of download count. `sled` at 0.34.7 from 2021 is dead; `rusqlite` replaces it
 - License is a verdict input, not a footnote. AGPL and GPL dependencies disqualify a closed-source app outright and appear in `Caveat:` before any technical merit
@@ -55,7 +55,7 @@ user-invocable: false
 
 These are the expensive ones. Each fails by doing nothing observable, so it survives development and dies on a user's machine.
 
-- **`notify-rust` no-ops without an install identity.** Windows requires a Start Menu shortcut carrying an AUMID; macOS requires a real `.app` bundle. Run from `cargo run`, notifications silently vanish. Verify from an installed build, never from the target directory
+- **`notify-rust` no-ops without an install identity.** Windows requires a Start Menu shortcut carrying an AUMID; macOS requires a real `.app` bundle. Under `cargo run`, toasts ride a borrowed PowerShell AUMID and appear fine - the installed build without its own identity is what drops them silently, so dev success is a false positive. Verify from an installed build, never from the target directory
 - **macOS Keychain returns `-34018` for unsigned binaries**, and every rebuild changes the ad-hoc signing identity, so a credential stored yesterday is unreadable today. A stable signing identity is a prerequisite for any credential feature
 - **`aws-lc-rs` needs CMake and NASM on Windows**, and rustls **panics** when both the `ring` and `aws-lc-rs` providers are active. Audit with `cargo tree -i aws-lc-rs` before adding any TLS-touching crate
 - **wgpu finds no adapter under VMware** and defaults to the low-power iGPU on hybrid laptops. Iced's backend selection is **environment-variable-only**, so a launcher script or shim must set `ICED_BACKEND` / `WGPU_POWER_PREF` *before process start* - setting them in `main()` is too late. Test the `tiny-skia` CPU fallback deliberately
@@ -110,6 +110,7 @@ Run these before the feature is written. Each one that returns unexpected output
 | Auto-update | `velopack` or `self_update`, always `self-replace` for the exe swap | No de-facto standard; the choice is yours to own and maintain |
 | Installers | `cargo-packager` | `cargo-bundle` is self-declared **alpha** |
 | Tray icon | `tray-icon` + `muda` | macOS requires main-thread construction |
+| Toast notifications | `notify-rust` | Silent-failure trap: needs an install identity (AUMID-bearing shortcut on Windows, real `.app` on macOS) |
 | Global hotkeys | `global-hotkey` | You write the macOS accessibility-permission flow yourself |
 | Credential storage | `keyring` 4.1.6 | Deprecated itself toward `keyring-core`; 4.1.3 was yanked; needs a **stable** signing identity on macOS |
 | Single instance | Available, boolean only | Argv forwarding to the running instance is yours to implement |
@@ -123,9 +124,10 @@ One block per capability assessed:
 
 ```
 Capability: {name}
-Verdict: {Strong | Workable | Gap}
-Blocked for: {Rust-specific | universal} - required when Verdict is Gap; omit otherwise
+Verdict: {Strong | Workable | Gap | Unknown}
+Blocked for: {Rust-specific | universal | crate-dead} - required when Verdict is Gap; omit otherwise
 Crate/approach: {crate + version, or the mechanism; `none` when Verdict is Gap}
+Evidence: {version + date, issue number, or dated source behind the verdict}
 Caveat: {the trap, license, or prerequisite; `none` when Strong}
 Escape hatch: {required when Verdict is Gap; omit for Strong and Workable}
 ```

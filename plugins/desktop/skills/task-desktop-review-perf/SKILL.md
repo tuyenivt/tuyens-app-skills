@@ -178,8 +178,8 @@ The fence below delimits the template for display only. Emit the report body as 
 
 **Assessment:** Approve | Request Changes | Discuss
 **Release Profile:** opt-level=<N>, lto=<setting>, debug-assertions=<bool> | not read
-**Dominant Cost:** [the single largest cost this change adds, in one line]
-**Scale Assumed:** [the item count, file size, or tree size the findings assume]
+**Dominant Cost:** [the single largest cost this change adds, in one line | none - the change adds no per-item, per-batch, or per-frame cost]
+**Scale Assumed:** [the item count, file size, or tree size the findings assume | n/a - no findings]
 **Unattributed:** [reported symptoms this change set does not explain, and any profile-revealed condition the diff did not cause - each with what would attribute it | none]
 
 ## Findings
@@ -210,6 +210,8 @@ The fence below delimits the template for display only. Emit the report body as 
 ```
 
 **Omit empty sections.** No High Impact heading if there are none.
+
+When the run files nothing, `## Findings` is written as `none.` followed by one line per surface this lens examined and deliberately did not file (a non-per-item `clone()`, a runtime-neutral profile change), each with the suppressing rule - a clean run distinguishes examined from unexamined.
 
 **Impact tier is set by cost, label by evidence.** An `inferred` finding whose cost is High Impact stays under `### High Impact` labeled `[Recommend]` - the evidence cap changes the label, never the tier. An `inferred` finding with no source read anchors to the file path alone; a line number is never invented.
 

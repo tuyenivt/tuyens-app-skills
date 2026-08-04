@@ -141,17 +141,17 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 **Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line.
 
-**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
+**Review mode** - source, a diff, a symptom report, or a question describing app surfaces without code was supplied (the last takes `Evidence: inferred` throughout). Emit one block per finding, ordered by severity, Critical first.
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {CraftedInput | PathEscape | LinkHandling | TOCTOU | UnsafeFFI | ProcessSpawn | DependencyAdvisory | UpdateIntegrity | CredentialStorage}
-- Evidence: {source | inferred (state what was not seen)}
-- Code: {one-line citation, or `not supplied` when the finding is inferred}
+- Evidence: {source | incident (the reported event already demonstrates the attack) | inferred (state what was not seen)}
+- Code: {one-line citation, or `not supplied` when no source was read - inferred or incident}
 - Attack: {the mechanism, concretely - "an archive entry named ../../ writes outside the extraction root"; a link or a concurrent change needs no adversary - state what the tree does, not who}
 - Consequence: {what the user loses - name the files or the bytes, not "compromise"}
-- Control type: {prevented | cost-raising only | accepted exposure}
+- Control type: {prevented | cost-raising only | accepted exposure} - labels what the Fix achieves; when the Fix's parts differ, label each part inside Fix
 - Fix: {the concrete change}
 ```
 
@@ -159,9 +159,9 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Consequence`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Consequence`.
 
-`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block. `Evidence: incident` carries no cap - the reported event is the evidence, so a confirmed compromise takes its true band.
 
-A finding whose only adversary is the user themselves is not emitted. Where the request asks for one, write `Out of scope: {concern} - local-first, user is not the adversary.` once, before the findings.
+A finding whose only adversary is the user themselves, or that imports a server threat model, is not emitted. Where the request asks for one, write `Out of scope: {concern} - {user is not the adversary | no server threat model}.` - one line per requested concern, before the findings.
 
 A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 

@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm the target platforms before applying the normalization section - the NFC/NFD divergence is a Windows-versus-macOS behaviour and does not reproduce on one platform alone.
 >
-> This skill owns **user-visible language and locale-dependent text behaviour, including filename text**. Path and `OsStr` mechanics belong to `desktop-filesystem-patterns`; comparing files for duplicate content to `desktop-batch-operations`; layout that must survive expanded strings to `iced-widget-patterns`; text scaling and contrast to `desktop-accessibility`.
+> This skill owns **user-visible language and locale-dependent text behaviour, including filename text**. Path and `OsStr` mechanics belong to `desktop-filesystem-patterns`; duplicate-content comparison and batch-operation safety (dry-run, undo) to `desktop-batch-operations`; layout that must survive expanded strings to `iced-widget-patterns`; text scaling and contrast to `desktop-accessibility`.
 
 ## When to Use
 
@@ -25,7 +25,7 @@ user-invocable: false
 
 - **No hardcoded user-facing string.** Every string a user reads resolves through a Fluent message keyed by a stable id
 - **Never build a sentence by concatenating translated fragments.** One parameterized message per sentence; word order is not portable
-- Plurals come from Fluent's CLDR plural categories, never from `if n == 1`. Several target languages have three or more categories
+- Plurals come from Fluent's CLDR plural categories, never from `if n == 1`. Several target languages have three or more categories; a one-category language (Japanese) keeps the selector with only `*[other]` so the count stays a formatted argument
 - Numbers, byte sizes, dates, and durations format through `icu4x` against the active locale, never through `format!` with a hardcoded pattern
 - **Filenames are compared and keyed on a normalized form; I/O always uses the `OsString` the filesystem returned.** A filename that round-trips through a normalizing step and back to disk is a corrupted rename
 - **A user-visible file list is sorted with a collator, not `str::cmp`.** Byte order is not alphabetical order in any non-ASCII locale
@@ -36,7 +36,7 @@ user-invocable: false
 
 ### Fluent, embedding, and keys
 
-`fluent` + `i18n-embed` + `fluent-templates` is the stack: `.ftl` files per locale, compiled into the binary so a single-file distribution keeps every language.
+`fluent` via `i18n-embed` (with `i18n-embed-fl` for the compile-checked `fl!` macro) is the stack: `.ftl` files per locale, compiled into the binary so a single-file distribution keeps every language.
 
 ```rust
 // Bad - unlocalizable, and the plural is wrong in Russian, Polish, and Welsh
@@ -122,7 +122,7 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 **Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line.
 
-**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding, ordered by severity, Critical first.
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
@@ -139,13 +139,13 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 Severity that does not fit a listed band: assign the nearest lower band and state why in `Impact`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Impact`.
 
-`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Impact`.
 
-When the app ships a single locale and has no localization stack installed, emit exactly `Single-locale project - i18n review limited to normalization, collation, and formatting findings.` before any findings, and report only those categories. Normalization and collation defects are filename-correctness bugs and are still in scope in a monolingual app.
+When the app ships a single locale and has no localization stack installed, emit exactly `Single-locale project - i18n review limited to normalization, collation, and formatting findings.` before any findings, and report only the `Normalization`, `CaseFolding`, `Collation`, `Formatting`, and `InvariantOutput` categories. Normalization and collation defects are filename-correctness bugs and are still in scope in a monolingual app.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored output as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
-In review mode, close with exactly one status line, after any `Deferred:` lines:
+In review mode, after any `Deferred:` lines, close per this table - when findings were emitted there is no separate closing line:
 
 | Condition | Line |
 | --- | --- |

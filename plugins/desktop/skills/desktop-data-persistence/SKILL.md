@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm what the data is worth before choosing a store - a rebuildable scan cache and a user's saved rename presets have different durability requirements, and treating the cache as precious is wasted work.
 >
-> This skill owns **choosing a store, versioning its schema, and locating its files**. The temp-file-plus-rename mechanics belong to `desktop-filesystem-patterns`; query throughput and index cost to `desktop-performance`; whether a database is warranted at all to `desktop-overengineering-review`; what ships in the installer to `desktop-build-release`.
+> This skill owns **choosing a store, versioning its schema, and locating its files**. The temp-file-plus-rename mechanics belong to `desktop-filesystem-patterns` (an `AtomicWrite` finding is still owned here); journal replay and undo semantics to `desktop-batch-operations`; query throughput and index cost to `desktop-performance`; whether a database is warranted at all to `desktop-overengineering-review`; what ships in the installer to `desktop-build-release`.
 
 ## When to Use
 
@@ -23,7 +23,7 @@ user-invocable: false
 ## Rules
 
 - **`rusqlite` with the `bundled` feature is the default store.** It compiles SQLite from source, so there is no system dependency to hunt on either platform and no version skew between a developer machine and a user's
-- **`sled` is dead. Do not introduce it.** The published release is 0.34.7 from 2021 and the 1.0 alpha line stalled in 2024. `redb` is alive but has broken its on-disk format twice, so adopting it means owning format-migration code the app did not ask for. `sled` found already shipped is a `StoreChoice` finding, not an emergency: the fix is a one-time import into SQLite - High when the store holds data the user cannot regenerate, Medium otherwise
+- **`sled` is dead. Do not introduce it.** The published release is 0.34.7 from 2021 and the 1.0 alpha line stalled in 2024. `redb` is alive but has broken its on-disk format twice, so adopting it means owning format-migration code the app did not ask for. `sled` found already shipped - or introduced in the diff under review - is a `StoreChoice` finding, not an emergency: the fix is a one-time import into (or a redirect to) SQLite - High when the store holds data the user cannot regenerate, Medium otherwise
 - Schema version lives in SQLite's `user_version` pragma. A version tracked in a side file drifts from the database it describes
 - **Migrations are forward-only and each one ships with a fixture database from the version it upgrades.** A migration tested only against a freshly-created schema is untested
 - Config and data directories come from the `directories` crate. A hardcoded `~/.myapp` or `%APPDATA%\myapp` is wrong on at least one target
@@ -40,7 +40,7 @@ user-invocable: false
 | Scan cache, hashes, thumbnail index | SQLite (`rusqlite`, `bundled`) | Indexed lookup by path, survives restart, deletable and rebuildable |
 | User settings and presets | TOML or JSON file, atomically written | Human-readable, diffable, editable when the app will not start |
 | Window geometry, last folder | Same settings file | Small, low-stakes |
-| Undo journal for a running batch | Append-only file or a SQLite table | Must survive a kill mid-run (`desktop-batch-operations`) |
+| Undo journal for a running batch | Append-only file or a SQLite table, in `data_dir` - never `cache_dir` | Must survive a kill mid-run and a cache wipe (`desktop-batch-operations`) |
 | Anything the user cannot regenerate | SQLite, with a backup before migration | Durability is the requirement |
 
 For a solo-maintained utility, one SQLite file plus one settings file covers everything. A second store is a second migration story, a second corruption story, and a second backup story.
@@ -94,8 +94,8 @@ tests/fixtures/
 fn migrates_every_shipped_version_to_current() {
     for fixture in ["v1.db", "v2.db"] {
         let db = copy_to_temp(fixture);
-        let conn = Connection::open(&db).unwrap();
-        migrate(&conn).unwrap();
+        let mut conn = Connection::open(&db).unwrap();
+        migrate(&mut conn).unwrap();
         assert_eq!(current_version(&conn), CURRENT);
         assert!(scan_cache_readable(&conn));       // data survived, not just the schema
     }
@@ -113,7 +113,7 @@ let cfg = PathBuf::from(std::env::var("HOME")?).join(".myapp/config.toml");
 // Good
 let dirs = ProjectDirs::from("com", "Example", "MyApp")
     .ok_or(Error::NoHomeDirectory)?;
-let config = dirs.config_dir();   // %APPDATA%\Example\MyApp   |  ~/Library/Application Support/com.Example.MyApp
+let config = dirs.config_dir();   // %APPDATA%\Example\MyApp\config   |  ~/Library/Application Support/com.Example.MyApp
 let data   = dirs.data_dir();     // %APPDATA%\Example\MyApp\data
 let cache  = dirs.cache_dir();    // %LOCALAPPDATA%\Example\MyApp\cache  |  ~/Library/Caches/...
 ```
@@ -137,7 +137,7 @@ tmp.as_file().sync_all()?;
 tmp.persist(&path)?;
 ```
 
-Deserialize with every field defaulted (`#[serde(default)]`) so a settings file written by an older version still loads, and an unknown field from a newer version is ignored rather than fatal. A settings struct that fails to parse on a missing field turns an added setting into a startup crash for every existing user.
+Deserialize with every field defaulted (`#[serde(default)]`) so a settings file written by an older version still loads, and an unknown field from a newer version is ignored rather than fatal. A settings struct that fails to parse on a missing field turns an added setting into a startup crash for every existing user. Ignoring is not enough on re-save: an older binary that saves the file strips fields it does not know - round-trip unknown keys (e.g. `#[serde(flatten)]` into a table) so an installed older build does not silently drop a newer version's settings.
 
 On a parse failure: rename the bad file to `settings.toml.bak`, start with defaults, and tell the user where the old file went. Silently overwriting destroys the evidence they would need to recover a long-tuned configuration.
 
@@ -163,7 +163,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 **Authoring mode** - the request is to write storage, migration, or settings code. Emit the code, then any `Deferred:` lines. No finding blocks and no status line.
 
-**Review mode** - one block per finding:
+**Review mode** - one block per finding, ordered by severity, Critical first:
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
@@ -176,7 +176,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 - Verify: {what to re-run or re-check - the fixture migration test, a fresh-install path, a same-second edit}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = user data lost or corrupted on upgrade, or a store that cannot be opened. High = stale results presented as current, a startup failure on an existing config, or a hardcoded path wrong on a target platform. Medium = a defect on an uncommon upgrade or platform path. Low = hygiene with no observed symptom.
+`Severity: {Critical | High | Medium | Low}` - Critical = user data lost or corrupted (on upgrade, on a crash mid-write, or by a migration), or a store that cannot be opened. High = stale results presented as current, a startup failure on an existing config, or a hardcoded path wrong on a target platform. Medium = a defect on an uncommon upgrade or platform path. Low = hygiene with no observed symptom.
 
 `Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block. Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`.
 

@@ -96,7 +96,7 @@ Record: the workspace layout, whether a GUI-free core crate exists, the resolved
 
 **Iced version.** Read the **resolved** version from `Cargo.lock` and record it. This project tracks latest rather than pinning a minor, so `Cargo.toml` holds a range and only the lockfile identifies what actually builds. Iced is pre-1.0 and its API moves between minor releases, so **a finding resting on Iced API surface names the version it assumes**. Where the resolved version differs from this plugin's guidance, note in Summary: `Detected iced <version>; this plugin's guidance targets 0.14.x - version-specific findings are annotated.` and review rather than stopping. Reduced confidence is concrete, not an adjective: no finding is downgraded on version grounds alone.
 
-**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check the change's API usage by reading it against the new version's surface rather than the old one - a read check, no build is run - and that any behaviour the release notes changed is accounted for. A defect found this way is filed as a Phase B finding, so it survives the low-risk short-circuit.
+**A `Cargo.lock` bump of `iced`, `wgpu`, or `winit` in the change set is itself review surface.** Under a track-latest policy that bump is a framework migration arriving inside an ordinary diff - check the API usage the bump affects against the new version's surface rather than the old one - in a lock-only change set that usage lives in unchanged code, so search the workspace for the APIs the release notes changed instead of confining the check to the diff - a read check, no build is run - and that any behaviour the release notes changed is accounted for. When the release notes are unreachable (offline), enumerate the workspace's usage of the bumped crate instead and state in Summary that the check is enumeration-limited - never report it clean. A defect found this way is filed as a Phase B finding, so it survives the low-risk short-circuit.
 
 **No GUI-free core.** If the workspace has no core crate, or the existing one depends on `iced`, note it once in Summary and treat it as the standing architectural condition Phase C reports against. Do not re-raise it per file.
 
@@ -110,6 +110,7 @@ Read the diff content once and reuse:
 
 - `git diff <base>` for the change body
 - `git diff --name-status <base>` for the file list
+- Untracked files in the handle's `reviewable` list have no content in `git diff` output - read each one directly; a new file is full review surface, not an empty diff
 
 Restrict analysis to the handle's `reviewable` paths; binary and generated paths are excluded and never diffed.
 

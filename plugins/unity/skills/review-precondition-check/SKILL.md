@@ -41,15 +41,17 @@ This skill **gates only**: it emits the change set and how it was derived, not t
 ### Step 1 - Resolve the change set
 
 ```bash
-git status --porcelain
+git status --porcelain -uall
 ```
 
-Parse the porcelain output into the change set. Column meanings: position 1 is the staged status, position 2 the unstaged status, `??` is untracked.
+Parse the porcelain output into the change set. Column meanings: position 1 is the staged status, position 2 the unstaged status, `??` is untracked. `-uall` lists files inside untracked directories individually rather than as one collapsed `dir/` entry. For rename entries (`R`), the new path is the change-set entry.
 
 - `--staged` passed -> keep entries with a non-space, non-`?` staged column.
 - Otherwise -> keep every entry.
 
-If the output is empty, the tree is clean: fall back to `last-commit` mode and resolve the change set from `git diff --name-status HEAD~1..HEAD`.
+If the output is empty, the tree is clean: fall back to `last-commit` mode and resolve the change set from `git diff --name-status HEAD~1..HEAD` - unless `git rev-parse -q --verify HEAD~1` fails, in which case `HEAD` is the initial commit and the change set comes from `git diff --name-status $(git hash-object -t tree /dev/null) HEAD`.
+
+Record `current_branch` from `git rev-parse --abbrev-ref HEAD` (`detached` when it prints `HEAD`); `base` follows from the mode table.
 
 ### Step 2 - Confirm the change set is non-empty
 
@@ -74,7 +76,7 @@ A clean tree whose only commit is the initial one is not a stop: `last-commit` m
 Split resolved paths into three lists:
 
 - `reviewable` - text files the workflow will diff.
-- `binary` - detected via `git diff --numstat` reporting `-` for both counts, or by extension for untracked files (images, audio, archives, fonts, compiled artifacts).
+- `binary` - detected via `git diff HEAD --numstat` (`--cached` for staged-only mode) reporting `-` for both counts, or by extension for untracked files (images, audio, archives, fonts, compiled artifacts). A bare `git diff --numstat` misses staged files.
 - `generated` - paths matching the project's generated-output conventions (`*.g.dart`, `*.freezed.dart`, `*.designer.cs`, lockfiles, `build/`, `Library/`).
 
 Binary and generated paths are reported as counts in the handle and excluded from `reviewable`. Never diff them.
@@ -89,7 +91,7 @@ If non-empty, add a note: `<N> stash entr(y|ies) present - not included in this 
 
 ### Step 5 - Report scale
 
-Count `reviewable` paths and their changed lines against the handle's `base`, limiting the diff to reviewable paths (`git diff HEAD --shortstat -- <reviewable paths>` for working-tree, `git diff --cached --shortstat -- <reviewable paths>` for staged-only, `git diff --shortstat HEAD~1..HEAD -- <reviewable paths>` for last-commit), plus line counts of untracked `reviewable` files. `changed_lines` therefore excludes binary and generated paths - a churned lockfile must not inflate the effort signal. Record both counts in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
+Count `reviewable` paths and their changed lines against the handle's `base`, limiting the diff to reviewable paths (`git diff HEAD --shortstat -- <reviewable paths>` for working-tree, `git diff --cached --shortstat -- <reviewable paths>` for staged-only, `git diff --shortstat <base>..HEAD -- <reviewable paths>` for last-commit, where `<base>` is the handle's base so the initial-commit fallback keeps working), plus `wc -l` line counts of untracked `reviewable` files - the one permitted non-git read. `changed_lines` = insertions + deletions + the untracked line counts. It therefore excludes binary and generated paths - a churned lockfile must not inflate the effort signal. Record both counts in the handle so the workflow can size its own effort and decide whether to warn about a large change set.
 
 ## Output Format
 

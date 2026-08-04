@@ -25,7 +25,7 @@ user-invocable: false
 - **The Iced `Engine` owns the device and queue.** Your code borrows them; it does not create them. Anything requiring non-default features or limits must be checked at startup, because you cannot retroactively request them
 - **`wgpu`'s version is Iced's, and this project tracks latest.** Never pin `wgpu` independently - that is rule 1 restated, since a version chosen apart from Iced's is a second crate copy. Three breaking `wgpu` majors shipped in roughly six months, so an Iced upgrade can rewrite every shader binding underneath you: treat a `Cargo.lock` bump of `iced` or `wgpu` as a migration to run and test, and check the shader path explicitly after one
 - Compute output that feeds rendering stays in a GPU buffer or texture. A readback to CPU memory that exists only to hand data to the next GPU pass forfeits the entire reason for the GPU path
-- **The `tiny-skia` CPU fallback is a tested path, not a theoretical one.** VMware guests and adapter-less machines land there; if it has never been run, it does not work
+- **The `tiny-skia` CPU fallback is a tested path, not a theoretical one.** VMware guests and adapter-less machines land there; if it has never been run, it does not work. Force it deliberately with `ICED_BACKEND=tiny-skia` set in the process environment before start (`WGPU_POWER_PREF` picks the adapter the same way) - never from inside `main()`
 - A GPU port needs a measurement against the CPU implementation it replaces. Transfer cost is real and for small images it dominates
 
 ## Patterns
@@ -124,13 +124,13 @@ Check this at startup, not at first dispatch. Discovering an unavailable feature
 
 ## Output Format
 
-Per finding:
+One block per finding, `[Must]` first:
 
 ```
 [Must | Recommend] {file:line | Cargo.toml | symbol, when source was supplied without paths | symptom, when no source was supplied}
 Area: {Version Coupling | Device Ownership | Dispatch Shape | Transfer Cost | Fallback Path}
 Issue: {the defect, named}
-Evidence: {the measurement, the `cargo tree -d` result, or the API constraint}
+Evidence: {the measurement, the `cargo tree -d` result, or the API constraint; a check that could not be run is named as pending}
 Fix: {concrete edit}
 ```
 
@@ -144,14 +144,14 @@ When assessing whether a workload belongs on the GPU rather than reviewing code,
 Workload: {operation and input size}
 Verdict: {GPU | CPU | Measure first}
 Passes: {count of chained GPU passes, or `1`}
-Readback: {none | per-frame | on-save}
+Readback: {none | per-frame | per-item | on-save}
 Baseline: {the CPU timing this is compared against | not measured}
 Fallback tested: {yes | no}
 ```
 
-`Verdict: GPU` requires a `Baseline:` that is not `not measured` - absent one, the verdict is `Measure first`. `Verdict: CPU` stands without a baseline when a table row above justifies it.
+`Verdict: GPU` requires a `Baseline:` that is not `not measured` - absent one, the verdict is `Measure first`. `Verdict: CPU` stands without a baseline when a table row above justifies it. At assessment time, before any GPU code exists, `Fallback tested: no` records the obligation the GPU path must discharge before ship, not a defect.
 
-Close with `wgpu source: {iced re-export | direct dependency - defect}` so the version-coupling check is visibly done.
+Close review output with `wgpu source: {iced re-export | direct dependency - defect | unverified - manifest not seen}` so the version-coupling check is visibly done. A workload assessment with no manifest omits the line.
 
 ## Avoid
 

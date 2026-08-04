@@ -23,7 +23,7 @@ user-invocable: false
 
 - **Audio decode is strong; video decode is FFI.** No pure-Rust H.264 or H.265 decoder exists. Any plan claiming otherwise is wrong
 - **Static linking is Cargo's ergonomic default and is wrong for LGPL compliance.** FFmpeg is dynamically linked here, always. Rust makes this trap worse than C++ does, because the correct choice is the one you have to go out of your way to make
-- **`--enable-gpl` is prohibited**, along with x264 and x265. It would make the whole application GPL, and there is no commercial FFmpeg license at any price. H.264/H.265 encode goes through **hardware encoders** - NVENC, QuickSync, VideoToolbox - with `rav1e` (AV1) as the software fallback
+- **`--enable-gpl` is prohibited**, along with x264 and x265. It would make the whole application GPL, and there is no commercial FFmpeg license at any price. H.264/H.265 encode goes through **hardware encoders** - NVENC, QuickSync, AMF, VideoToolbox - with `rav1e` (AV1) as the software fallback. Trim and export without re-encode is an FFmpeg **remux** (stream copy) - no encoder involved; check whether remux covers the requirement before budgeting the encoder matrix
 - **Video sits behind a trait boundary from day one.** The binding lineage `ffmpeg` -> `ffmpeg-next` -> `ffmpeg-the-third` is three abandonments deep; the current binding will be abandoned too
 - `symphonia`'s **default features are royalty-free codecs only**. MP3 and AAC require explicit feature flags, and it is **decode-only by design** - no plan may assume it encodes
 - Budget a **multi-day spike** for FFmpeg build setup on Windows before estimating any video feature. vcpkg or prebuilt binaries, bindgen and LLVM, `PKG_CONFIG_PATH` - none of it is a one-afternoon task
@@ -56,12 +56,12 @@ Three different needs get conflated into "play a file", and each has a different
 
 | Need | Reach for | Not |
 | --- | --- | --- |
-| Sample data for analysis, waveform, or conversion | `symphonia` directly | `rodio` - it owns an output stream you do not want |
+| Sample data for analysis, waveform, or conversion | `symphonia` directly | `rodio` - a second, differently-featured codec surface plus playback machinery you do not need |
 | Play a file to the default device | `rodio` 0.22 | raw `cpal` - you would rewrite mixing |
 | Capture input, or a custom output graph | `cpal` | `rodio` - it does not expose the device layer you need |
 | Change sample rate between two of the above | `rubato` | naive nearest-sample resampling |
 
-Pulling `rodio` in for a waveform display starts an audio output stream and a mixing thread the app never uses.
+Pulling `rodio` in for a waveform display decodes through rodio's own codec feature set - a second silent-failure surface independent of your `symphonia` features - and drags playback machinery into a path that plays nothing.
 
 ### Video: the licensing decision comes first
 
@@ -130,25 +130,25 @@ Exposure: {for Licensing: the obligation triggered and who it binds; otherwise t
 Fix: {concrete manifest, trait, or packaging edit}
 ```
 
-`Area: Licensing` findings are always `[Must]`. No other area is escalated without a measurement or a reproduced failure.
+`Area: Licensing` findings are always `[Must]`. No other area is escalated without a measurement or a reproduced failure - and a deterministic silent failure readable from the manifest (a codec feature missing while that input is accepted, DLLs absent from the installed layout) counts as reproduced.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none. A review that produces no finding closes with exactly `No media findings.`
+A defect owned by a sibling named in the ownership blockquote is written after the findings or the scoping form as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none. A review that produces no finding closes with exactly `No media findings.`
 
-When scoping a media feature rather than reviewing code, produce instead:
+When scoping a media feature rather than reviewing code, produce instead the form below - one form per scope; when audio and video paths coexist, a field carries one line per path:
 
 ```
 Media type: {audio | video | both}
-Licensing: {LGPL - dynamic link, no --enable-gpl | n/a - no FFmpeg or FFI codec in this path}
+Licensing: {LGPL - dynamic link, no --enable-gpl, whenever FFmpeg appears | FFI codec licenses as listed in License obligations, for FFI without FFmpeg | n/a - pure Rust path}
 Decode path: {crate + features, or FFI binding + link mode}
 Encode path: {crate, FFI library, hardware encoder, or `none - decode only`}
 Link mode: {dynamic | n/a} - required whenever FFmpeg appears; `static` is a defect, not an option
 License obligations: {each triggered obligation - the LGPL relink provision, the shared-library shipping layout, the source offer}
-Hardware encoder coverage: {per target, with the software fallback | `n/a - decode only`}
+Hardware encoder coverage: {per target, with the software fallback | `n/a - no video encode path`}
 Trait boundary: {the owned type crossing it, or `absent - defect`}
-Build spike: {completed on {date} | required, {estimate}}
+Build spike: {completed on {date} | required, {estimate} | `not required - no FFmpeg in this path`}
 ```
 
-`Licensing` is fixed, not a question, whenever FFmpeg or any FFI codec appears in either path - a scope emitting anything other than the LGPL line then has departed from the plugin's decision and states why in `License obligations`. A pure-Rust path (`symphonia` decode, `rav1e`/`rav1d`) writes the `n/a` form instead.
+`Licensing` is fixed, not a question, whenever FFmpeg appears in either path - a scope emitting anything other than the LGPL line then has departed from the plugin's decision and states why in `License obligations`. FFI codecs without FFmpeg (libopus, LAME) are not LGPL-bound by decree; their own licenses are named in `License obligations`. A pure-Rust path (`symphonia` decode, `rav1e`/`rav1d`) writes the `n/a` form.
 
 ## Avoid
 
@@ -160,6 +160,7 @@ Build spike: {completed on {date} | required, {estimate}}
 - `symphonia` with default features when MP3 or AAC input is accepted
 - Planning encode on `symphonia`
 - FFmpeg binding types appearing in application code outside the adapter module
+- Two FFmpeg binding crates coexisting in one workspace
 - Estimating a video feature before the Windows build spike has produced a running binary
 - Treating FDK-AAC as license-equivalent to libopus
 - Shipping dynamic FFmpeg without verifying the DLLs load from the installed layout

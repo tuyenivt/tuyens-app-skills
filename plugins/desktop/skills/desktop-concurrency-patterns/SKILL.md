@@ -79,7 +79,7 @@ let pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
 pool.install(|| paths.par_iter().map(|p| hash(p)).collect::<Vec<_>>());
 ```
 
-Do not perform blocking file I/O on an async runtime's core threads if the app has one; that is what `spawn_blocking` exists for.
+Do not perform blocking file I/O on an async runtime's core threads if the app has one; that is what `spawn_blocking` exists for. A channel feeds the pool via `par_bridge()` when the input streams rather than arriving as a slice. Rayon propagates a worker panic out of the parallel iterator - isolate it per item with `catch_unwind(AssertUnwindSafe(..))` in the map, so one poisoned file fails one item instead of the batch.
 
 ### Cancellation
 
@@ -165,24 +165,24 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 **Authoring mode** - the request is to write concurrent code. Emit the code, then any `Deferred:` lines. No finding blocks and no status line.
 
-**Review mode** - one block per finding:
+**Review mode** - one block per finding, ordered by severity, Critical first:
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {Backpressure | UnboundedSpawn | Cancellation | ProgressFlood | Contention | Determinism | WrongWorkload | PanicHandling}
-- Evidence: {measured (name the tool, machine, and input scale) | estimated (source read, no measurement; state the item count and payload size assumed) | inferred (no source read; state what was not seen)}
+- Evidence: {measured (name the tool, machine, and input scale) | estimated (source read, no measurement; state the item count and payload size assumed) | inferred (no source read; state what was not seen and the scale assumed)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Failure: {the concrete state that goes wrong - queue depth, thread count, stall duration, a differing run}
 - Fix: {the concrete change}
 - Verify: {what to re-measure or re-check - peak RSS at the largest input, thread count, cancel-to-stop latency, two runs byte-identical}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = OOM, deadlock, or a UI that never recovers. High = an unresponsive cancel, a visible stall, or nondeterministic output on a destructive path. Medium = contention or overhead that costs throughput without a correctness risk. Low = a cheap win with no observed symptom.
+`Severity: {Critical | High | Medium | Low}` - Critical = OOM, deadlock, a crash that loses the batch, or a UI that never recovers. High = an unresponsive cancel, a visible stall, a normal shutdown path that panics instead of stopping cleanly, or nondeterministic output on a destructive path. Medium = contention or overhead that costs throughput without a correctness risk. Low = a cheap win with no observed symptom.
 
 `Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored code as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
 In review mode, close with exactly one status line, after any `Deferred:` lines:
 

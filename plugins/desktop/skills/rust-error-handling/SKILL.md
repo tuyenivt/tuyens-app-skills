@@ -91,7 +91,7 @@ let group = self.groups.get(idx)
 
 The test: could this fail on a user's machine with valid input? Filesystem, parse, decode, network, and user input all can - those are `Result`. A slice index the constructor guarantees, a `HashMap` key inserted three lines above, and an unreachable match arm cannot - those are `expect` with the invariant written out.
 
-Two more legitimate panics: a `Mutex` `PoisonError` in an app that has no meaningful recovery from a poisoned lock, and a startup-time configuration invariant that makes the program meaningless if violated. Both still state the invariant.
+Two more legitimate panics: a `Mutex` `PoisonError` in an app that has no meaningful recovery from a poisoned lock, and a startup-time configuration invariant that makes the program meaningless if violated. Both still state the invariant. Recovering a poisoned lock with `into_inner` instead is legitimate when the guarded state stays consistent across a panic - say which was chosen and why.
 
 In the UI crate specifically, a panic inside `update` or `view` takes down the window mid-operation and loses unsaved work - the bar for panicking there is higher, not lower.
 
@@ -145,7 +145,7 @@ Build this by keeping the path in the error type and mapping `ErrorKind` to the 
 
 ## Output Format
 
-When this skill produces a finding:
+When this skill produces a finding, emit one block per finding, `[Must]` first:
 
 ```
 [Must|Recommend] {file:line | symbol, when source was supplied without paths}
@@ -155,9 +155,9 @@ Consequence: <what the user or caller loses - "the batch aborts at the first loc
 Fix: <the concrete type or call change>
 ```
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+After the findings come the `Panic:` lines, then any `Deferred:` lines. A defect - or, in design mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
-When designing an error path rather than reviewing:
+When designing an error path rather than reviewing, produce the form below - repeated per layer when the feature spans core and app:
 
 ```
 Layer: <core | app>
@@ -168,7 +168,7 @@ Panics: <each remaining unwrap/expect with the invariant it asserts | none>
 User message: <the sentence the user sees, and the action it offers>
 ```
 
-Every `unwrap`/`expect` in reviewed code gets a line, findings or not: `Panic: <file:line> - <invariant asserted | FALLIBLE - must be a Result>`.
+Every `unwrap`/`expect` in reviewed code gets a line, findings or not: `Panic: <file:line> - <invariant asserted | FALLIBLE - must be handled, not panicked | not a panic site - recovery path>`.
 
 `[Must]` marks a defect the Rules name - an unwrap on a fallible result, a batch that aborts on its first item, a message the user cannot act on. `[Recommend]` marks a working path with a better shape - a context string worth adding, a summary type over a bare count.
 

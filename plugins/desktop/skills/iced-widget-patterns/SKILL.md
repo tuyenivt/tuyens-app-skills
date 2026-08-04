@@ -43,8 +43,8 @@ scrollable(column(groups.iter().map(row_view).collect::<Vec<_>>()))
 
 // Good - only the visible window is built
 let (first, count) = visible_window(scroll_offset, viewport_height, ROW_HEIGHT, groups.len());
-let spacer_above = Space::with_height(first as f32 * ROW_HEIGHT);
-let spacer_below = Space::with_height((groups.len() - first - count) as f32 * ROW_HEIGHT);
+let spacer_above = Space::new().height(first as f32 * ROW_HEIGHT);   // 0.14: Space builds via new().height(); with_height is gone
+let spacer_below = Space::new().height((groups.len() - first - count) as f32 * ROW_HEIGHT);
 scrollable(column![spacer_above, column(groups[first..first + count].iter().map(row_view)), spacer_below])
     .on_scroll(Message::Scrolled)
 ```
@@ -142,10 +142,10 @@ Model these as one enum rather than a set of independent booleans, so impossible
 
 ## Output Format
 
-When this skill produces a finding:
+When this skill produces a finding, emit one block per finding, `[Must]` first:
 
 ```
-[Must|Recommend] {file:line | symbol, when source was supplied without paths}
+[Must|Recommend] {file:line | file, when the line is unknown | symbol, when source was supplied without paths}
 Category: <virtualization | table-widget | element-lifetime | custom-widget | styling | keyboard-focus | colour-only-signal | missing-state | per-frame-work>
 Issue: <the defect, named>
 Consequence: <what the user sees - "UI locks for ~8s on a 100k-row result", "unreadable in dark theme">
@@ -153,6 +153,8 @@ Fix: <the concrete change>
 ```
 
 `[Must]` when the consequence is a freeze or lockup, a blank pane on a reachable state, an interactive control with no keyboard path, or text unreadable under a shipped theme. `[Recommend]` otherwise.
+
+Close review output with one line, `Iced version: {the resolved version from Cargo.lock | unresolved - every signature above is UNVERIFIED}`, so the version check is visibly done.
 
 When designing a view rather than reviewing:
 
@@ -170,7 +172,7 @@ Any signature stated for an Iced widget carries `verified against <version>` or 
 
 When asked for guidance with no code supplied, answer in the design format with `Iced version: UNRESOLVED`, fill every slot the request allows, and name the view files needed to go further - never emit `file:line` findings against code that was not shown.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in design mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the design form as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
 ## Avoid
 

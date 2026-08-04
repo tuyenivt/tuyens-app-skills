@@ -112,7 +112,7 @@ Watching recursively over a large tree or a network share is expensive; scope th
 
 - **Clipboard** (`arboard`): on X11 the contents are owned by the process and disappear on exit; on Windows and macOS the OS takes a copy. Copy of a path uses the display form; the app keeps the `PathBuf`
 - **Global hotkeys** (`global-hotkey`): registration fails when another app holds the combination - surface the conflict and let the user rebind. On macOS the hotkey requires Accessibility permission, and **the crate does not drive that flow**: detect the denial, explain it, and deep-link to System Settings. Never register a bare common key
-- **Single instance** (`single-instance`): the crate answers only "am I first". Forwarding the second instance's argv to the first (named pipe on Windows, Unix socket on macOS) and raising the existing window is application code. Without it, double-clicking a file does nothing visible
+- **Single instance** (`single-instance`): the crate answers only "am I first". Forwarding the second instance's argv to the first (named pipe on Windows, Unix socket on macOS) and raising the existing window is application code. Without it, double-clicking a file does nothing visible. Two OS caveats: Windows foreground-lock rules may flash the taskbar button instead of raising the window - accept that as the OS's answer - and macOS delivers file-opens to a running app as Apple Events, not as a second process's argv
 - **Launch on login**: `HKCU\...\Run` on Windows, a `LaunchAgents` plist on macOS. Per-user, opt-in, revocable from the app's own settings, and the setting is read back from the OS rather than from the app's config - the user may have turned it off elsewhere
 
 ### Credential storage
@@ -128,31 +128,31 @@ Store the smallest possible thing - a token, never a re-derivable secret - and t
 
 Two modes, chosen by whether the request supplies code to judge or asks for code to be produced.
 
-**Authoring mode** - the request is to write or design something. Emit the code or design, one `Degraded:` line per integration stating what the app does when the OS refuses or the capability is absent, then any `Deferred:` lines. No finding blocks, no severity, no status line.
+**Authoring mode** - the request is to write or design something. Emit the code or design per integration, each integration followed by its `Degraded:` line stating what the app does when the OS refuses or the capability is absent; close with any `Deferred:` lines. No finding blocks, no severity, no status line.
 
-**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding, ordered by severity, Critical first.
 
 ```
-### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
+### [Severity] {file:line | file - symbol, when the line is unknown | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {Dialog | DragDrop | Tray | Notification | FileWatch | Clipboard | Hotkey | SingleInstance | Autostart | CredentialStore | ThreadAffinity}
 - Platform: {Windows | macOS | both}
 - Evidence: {source | inferred (state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
-- Prerequisite: {packaging | signing | notarization | OS permission | none}
+- Prerequisite: {packaging | signing | notarization | OS permission | none; list every value that applies}
 - Symptom: {what the user observes - "no toast appears and no error is logged"}
 - Fix: {the concrete change, and the degraded path when the capability is absent}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = a capability the platform cannot provide is depended on with no alternative, or an AppKit object is touched off the main thread. High = the feature silently no-ops in a shipped build (missing AUMID or bundle, unsigned keychain access) or an OS callback runs work on the delivering thread. Medium = a missing degraded path for a denied permission or a conflicting hotkey, or an unbounded recursive watch. Low = a discoverability or persistence nit.
+`Severity: {Critical | High | Medium | Low}` - Critical = a capability the platform cannot provide is depended on with no alternative, or an AppKit object is touched off the main thread. High = the feature silently no-ops in a shipped build (missing AUMID or bundle, unsigned keychain access), an OS callback runs work on the delivering thread, or a blocking dialog stalls the event loop. Medium = a missing degraded path for a denied permission or a conflicting hotkey, an unbounded recursive watch, or raw watcher events consumed without a debouncer. Low = a discoverability or persistence nit.
 
-Severity that does not fit a listed band: assign the nearest lower band and state why in `Symptom`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Symptom`.
+Severity that does not fit a listed band: assign the nearest lower band and state why in `Symptom`. A defect matching two bands takes the higher and names the other in `Symptom`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Symptom`.
 
 `Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored output as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
-In review mode, close with exactly one status line, after any `Deferred:` lines:
+In review mode, after any `Deferred:` lines, close per this table - when findings were emitted there is no separate closing line:
 
 | Condition | Line |
 | --- | --- |

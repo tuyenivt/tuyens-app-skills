@@ -27,7 +27,7 @@ Non-negotiable. Apply in addition to stack-specific or workflow-specific rules.
 6. **Push back on likely-wrong requests.** If a request would break a documented convention, introduce a known anti-pattern, or contradict a stated goal, say so before acting. Push back once; if the user insists, comply and state what you're giving up - insistence counts as the confirmation Proportionality requires.
 7. **Goal-driven execution with verification.** Convert each task into verifiable success criteria. For multi-step work, state a brief plan with a verify check per step. Work is not done until verified.
 
-**Proportionality and disposition.** Apply rigor in proportion to blast radius. When an ambiguity, tradeoff, or conflict surfaces, the default disposition is: state the assumption or chosen default inline ("Assuming X since Y") and proceed. Stop and wait for confirmation only when the goal itself is unclear or the change is high blast radius (irreversible, or a plausible failure would break security, lose or corrupt user data, or move money). Verification always applies, even if the check is "re-read the changed line." When the change cannot be verified before it ships - no reproducing environment, or the broken system is the only one exhibiting the bug - that is not an exemption: state the check you could not run, name the post-deploy signal that will stand in for it, and say how long you need to watch it.
+**Proportionality and disposition.** Apply rigor in proportion to blast radius. When an ambiguity, tradeoff, or conflict surfaces, the default disposition is: state the assumption or chosen default inline ("Assuming X since Y") and proceed. Stop and wait for confirmation only when the goal itself is unclear or the change is high blast radius (irreversible, or a plausible failure would break security, lose or corrupt user data, or move money). A stop gates only the portion that requires it - independent, reversible steps proceed while the gated step waits, and the plan names the gate. Verification always applies, even if the check is "re-read the changed line." When the change cannot be verified before it ships - no reproducing environment, or the broken system is the only one exhibiting the bug - that is not an exemption: state the check you could not run, name the post-deploy signal that will stand in for it, and say how long you need to watch it.
 
 **Rule interactions.**
 - Rule 1 vs Rule 5: when the assumption you are stating and the tradeoff you are naming are the same decision, write one sentence, not two - the assumption is the chosen option and the tradeoff is the alternative ("Assuming X since Y; the alternative is Z").
@@ -75,7 +75,7 @@ This skill produces no textual artifact. Its output is the behavior of the consu
 Contract with consuming workflows:
 
 - The workflow's Self-Check section includes one line confirming this skill was loaded at Step 1, e.g. `- [ ] Step 1: behavioral-principles loaded`. No further body text is required.
-- At runtime, before reporting done, the executing agent confirms in-context that each Rule was honored or did not apply (with reason). This verification is behavior, not Markdown pasted into the consuming skill.
+- At runtime, before reporting done, the executing agent confirms in-context that each Rule was honored or did not apply (with reason) - a check the agent performs, not a rule-by-rule recap written to the user. This verification is behavior, not Markdown pasted into the consuming skill.
 
 ## Avoid
 

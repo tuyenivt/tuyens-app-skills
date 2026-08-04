@@ -45,7 +45,7 @@ for i in 0..state.files.len() {
 }
 ```
 
-Three clones that are correct and should not be flagged: `Arc::clone` (a refcount bump, spell it `Arc::clone(&x)` so the reader sees it), a small `Copy`-like value, and a value an Iced `Message` must own because messages are `Clone` by contract. Three that are defects: cloning a collection to end a borrow, cloning inside a hot loop where a reference would do, and cloning a `String` that is immediately borrowed as `&str`.
+Three clones that are correct and should not be flagged: `Arc::clone` (a refcount bump, spell it `Arc::clone(&x)` so the reader sees it), a small `Copy`-like value, and a value an Iced `Message` must own because messages are `Clone` by contract - at message construction; a consumed message's payload is already owned, so move it. Three that are defects: cloning a collection to end a borrow, cloning inside a hot loop where a reference would do, and cloning a `String` that is immediately borrowed as `&str`.
 
 ### Cow for the mostly-unchanged case
 
@@ -130,7 +130,7 @@ let s = unsafe { std::str::from_utf8_unchecked(bytes) };
 let s = unsafe { std::str::from_utf8_unchecked(bytes) };
 ```
 
-For this app class, `unsafe` is justified in roughly three places: a documented FFI call into a platform API, a memory-mapped file whose backing may not change while mapped, and a measured hot-loop bound-check elision with a benchmark to show for it. Anything else - and any `unsafe` used to escape a borrow error - is a defect. `unsafe` never fixes a lifetime problem; it hides it.
+For this app class, `unsafe` is justified in roughly three places: a documented FFI call into a platform API, a memory-mapped file whose backing may not change while mapped, and a measured hot-loop elision of a bound or validation check with a benchmark to show for it. Anything else - and any `unsafe` used to escape a borrow error - is a defect. `unsafe` never fixes a lifetime problem; it hides it.
 
 ### AI-generated Rust smells
 
@@ -147,31 +147,32 @@ For this app class, `unsafe` is justified in roughly three places: a documented 
 
 ## Output Format
 
-When this skill produces a finding:
+When this skill produces a finding, emit one block per finding, `[Must]` first:
 
 ```
-[Must|Recommend] {file:line | symbol, when source was supplied without paths}
+[Must|Recommend] {file:line | file:line-line | symbol, when source was supplied without paths}
 Category: <ownership | borrowing | clone | iterator | newtype | cow | generics | unsafe | api-signature>
 Issue: <the defect, named>
 Why it matters: <the concrete cost - allocation per item, lost parallelism, a swap the compiler cannot catch>
 Fix: <the concrete signature or restructure>
 ```
 
-A defect owned by a sibling named in the ownership blockquote (an `unwrap` policy question, a `Send`/`Sync` question, a crate-placement question) is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+After the findings come the `Unsafe:` lines, then any `Deferred:` lines. A defect - or, in design mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote (an `unwrap` policy question, a `Send`/`Sync` question, a crate-placement question) is written as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
-When designing an API or a type rather than reviewing:
+When designing an API or a type rather than reviewing, produce the form below - repeated per designed item:
 
 ```
 Signature: <the proposed function or type>
 Ownership: <borrowed | owned, and why the callee needs it>
 Allocation: <what allocates, per call and per item>
 Newtypes: <domain identities given their own type | none - all bare primitives, justified>
+Generics: <none - concrete types | the parameter and the second caller that warrants it>
 Unsafe: <none | the block, its invariant, and what upholds it>
 ```
 
 Every `unsafe` block reviewed gets a line, findings or not: `Unsafe: <file:line> - <invariant stated | INVARIANT MISSING>`.
 
-`[Must]` marks a defect - anything the Rules or the smell table names. `[Recommend]` marks a working construct with a better shape - a missed `Cow`, an intermediate `collect()`, a derive the type does not need.
+`[Must]` marks a defect with a concrete cost - a borrow-escape clone, serialized parallelism, a bare-primitive swap hazard, `unsafe` without its invariant, a `&String`/`&Vec` parameter. `[Recommend]` marks a working construct with a better shape - a missed `Cow`, an intermediate `collect()`, a derive the type does not need.
 
 A review that produces no finding closes with exactly `No Rust language findings.` after any `Unsafe:` lines - a correct `clone()` or a justified `unsafe` is not written up as a defect.
 

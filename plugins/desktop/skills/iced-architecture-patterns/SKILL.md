@@ -165,13 +165,15 @@ Consequence: <what the user sees or what drifts - "window frozen for the scan's 
 Fix: <the concrete change>
 ```
 
-`[Must]` for blocking-update and view-purity findings, and for a message payload that cannot compile as stated (borrowed or non-`Clone`). `[Recommend]` otherwise.
+`[Must]` for blocking-update and view-purity findings, and for a message payload that cannot compile as stated (borrowed or non-`Clone`). `[Recommend]` otherwise. `state-placement` also covers a model deriving `Clone` it does not need, and view fields on a core type - which crate a domain type lives in stays `desktop-core-architecture`'s call. The choice of mechanism (Task vs Subscription vs a side-effect spawn in `update`) is this skill's finding; how the job then executes off-thread is `desktop-concurrency-patterns`'.
 
-A defect the scope note assigns to another skill (crate placement, widget construction and lists, `Task` internals, long-job execution) is not filed under a category. It is returned as one line instead, so the observation survives:
+Findings are emitted `[Must]` first. A defect the scope note assigns to another skill (crate placement, widget construction and lists, `Task` internals, long-job execution) is not filed under a category. It is returned after the findings - or after the design form - as one line, so the observation survives:
 
 ```
-Handoff: <desktop-core-architecture | iced-widget-patterns | iced-async-patterns | desktop-concurrency-patterns> - <the observation, one line>
+Handoff: <desktop-core-architecture | iced-widget-patterns | iced-async-patterns | desktop-concurrency-patterns> - <file:line - the observation, one line>
 ```
+
+Close review output with one line, `Iced version: {the resolved version from Cargo.lock | unresolved - every signature above is UNVERIFIED}`, so the version check is visibly done.
 
 When designing an app or screen rather than reviewing:
 

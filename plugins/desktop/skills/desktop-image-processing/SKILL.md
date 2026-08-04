@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm what the images are for before applying this skill - a preview grid, a dedup pass, and a conversion pipeline have different correctness bars.
 >
-> This skill owns **decoding pixels and comparing images**. Hash selection and the size-first grouping strategy belong to `desktop-performance`; getting the decode off the UI thread to `desktop-concurrency-patterns`; acting on the match to `desktop-batch-operations`; reading the files to `desktop-filesystem-patterns`.
+> This skill owns **decoding pixels and comparing images**. Hash selection and the size-first grouping strategy belong to `desktop-performance`; a UI-thread decode is a finding here, while the worker, channel, and in-flight-cap mechanics of the fix belong to `desktop-concurrency-patterns`; acting on the match to `desktop-batch-operations`; reading the files to `desktop-filesystem-patterns`.
 
 ## When to Use
 
@@ -22,7 +22,7 @@ user-invocable: false
 
 ## Rules
 
-- **Decode at thumbnail resolution. Never decode full then downscale.** A 6000x4000 JPEG is 72 MB of RGBA in memory; the 200px thumbnail needed 0.16 MB
+- **Decode at thumbnail resolution. Never decode full then downscale.** A 6000x4000 JPEG is 96 MB of RGBA in memory; the 200px thumbnail needed 0.16 MB
 - **Every cache is bounded.** An unbounded thumbnail map on a 50k-image folder is an OOM, not a slow path
 - **Decoding never runs on the UI thread.** One 40 MP file freezes the window for a visible fraction of a second, and a grid does it hundreds of times
 - **Hash equality alone never authorizes a destructive action.** Confirm bytes, or require explicit user selection
@@ -35,7 +35,7 @@ user-invocable: false
 ### Decode at the size you need
 
 ```rust
-// Bad - 72 MB allocated and fully decoded to produce a 200px thumbnail,
+// Bad - 96 MB allocated and fully decoded to produce a 200px thumbnail,
 // with no limits against a hostile header
 let img = image::open(path)?;
 let thumb = img.thumbnail(200, 200);
@@ -152,7 +152,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 **Authoring mode** - the request is to write image or thumbnail code. Emit the code, then any `Deferred:` lines. No finding blocks and no status line.
 
-**Review mode** - one block per finding:
+**Review mode** - one block per finding, ordered by severity, Critical first:
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
@@ -160,12 +160,12 @@ Two modes, chosen by whether something is being reviewed or authored.
 - Category: {DecodeSize | CacheBound | UIThread | MatchSemantics | Orientation | DecodeLimits | FailureHandling | Benchmarking}
 - Evidence: {measured (release build, name the machine and image set) | estimated (source read, no measurement; state the image count and dimensions assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
-- Cost: {with units - "72 MB decoded per 200px thumbnail", "unbounded cache over 50k files", "180 ms UI stall per cell"}
+- Cost: {with units - "96 MB decoded per 200px thumbnail", "unbounded cache over 50k files", "180 ms UI stall per cell"}
 - Fix: {the concrete change}
 - Verify: {what to re-measure or re-check - peak RSS, decode ms in a release build, cache byte ceiling, orientation on a portrait phone photo}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = data loss from an unverified match, or unbounded memory on a realistic library. High = a UI freeze on a common path, or full-resolution decode for thumbnails. Medium = cost or wrongness on an uncommon input. Low = a cheap win with no observed symptom.
+`Severity: {Critical | High | Medium | Low}` - Critical = data loss from an unverified match, or unbounded memory on a realistic library. High = a UI freeze on a common path, full-resolution decode for thumbnails, or wrong pixels or files on a common input (sideways rendering, a re-save that double-rotates, aspect distortion). Medium = cost or wrongness on an uncommon input. Low = a cheap win with no observed symptom.
 
 `Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Cost`. `estimated` and `inferred` bound the header at High, with `Cost` naming the uncapped band; neither ever raises a block. A number from a debug build is not `measured` - it is `estimated`, and the block says so.
 

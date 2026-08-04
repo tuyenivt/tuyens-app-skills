@@ -128,9 +128,11 @@ C:\Program Files\MyApp\myapp.exe
 %LOCALAPPDATA%\MyApp\myapp.exe
 ```
 
+On macOS the `.app` drag-installs to `/Applications` or `~/Applications`; either is user-writable, so the same silent-update property holds.
+
 A machine-wide install cannot silently self-update, because writing to `Program Files` requires elevation the running app does not have. Per-user install is what makes the update story work at all.
 
-For the update itself: **`velopack`** (delta updates, both platforms, handles the installer side) or **`self_update`** (simpler, GitHub Releases-shaped). Either way the executable swap goes through **`self-replace`** - a running executable cannot overwrite itself directly on Windows, and hand-rolling the rename dance is where update systems corrupt installs.
+For the update itself: **`velopack`** (delta updates, both platforms, handles the installer side) or **`self_update`** (simpler, GitHub Releases-shaped) - prefer `velopack` when both platforms ship or download size matters; `self_update` fits a single-platform GitHub-Releases shape. A private repository's GitHub Releases are not anonymously downloadable, so customers need a public feed host (or a public releases-only repo) that CI publishes artifacts to. Either way the executable swap goes through **`self-replace`** - a running executable cannot overwrite itself directly on Windows, and hand-rolling the rename dance is where update systems corrupt installs.
 
 The update must verify a signature against a key compiled into the binary before executing anything it downloaded (`desktop-security-patterns`). Version comparison refuses downgrades.
 
@@ -174,17 +176,17 @@ Distribution: closed-source commercial, perpetual licence + 12-month update wind
 
 It is a fixed value, not a question. A design departing from it states why on the same line.
 
-When the design targets a platform the maintainer cannot run, it carries one `QA gap:` line naming the unverified platform and the chosen mitigation - a headless CI smoke test, a beta tester with the hardware, or shipping that platform as experimental.
+When the design targets a platform the maintainer cannot run, it carries one `QA gap:` line naming the unverified platform and the chosen mitigation(s) - a headless CI smoke test, a beta tester with the hardware, or shipping that platform as experimental.
 
-**Review mode** - a manifest, workflow file, or build symptom was supplied. Emit one block per finding.
+**Review mode** - a manifest, workflow file, or build symptom was supplied. Emit one block per finding, ordered by severity, Critical first.
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {ReleaseProfile | PanicStrategy | Packaging | WindowsSigning | MacSigning | Notarization | CrossCompile | CIConfig | DependencyToolchain | CryptoProvider | InstallLocation | AutoUpdate | Licensing | ReleaseQA}
-- Platform: {Windows | macOS | both | CI}
-- Evidence: {source | inferred (state what was not seen)}
-- Code: {one-line citation, or `not supplied` when the finding is inferred}
+- Platform: {Windows | macOS | both | CI} - `CI` is for workflow-configuration defects; a build failing on a platform's runner takes that platform
+- Evidence: {source | incident (the reported event already demonstrates the failure) | inferred (state what was not seen)}
+- Code: {one-line citation, or `not supplied` when no source was read - inferred or incident}
 - Failure: {where it breaks - "compiles clean, panics on the first TLS connection"}
 - Cost: {the money, time, or hardware the fix requires, or `none`}
 - Fix: {the concrete change}
@@ -192,13 +194,13 @@ When the design targets a platform the maintainer cannot run, it carries one `QA
 
 `Severity: {Critical | High | Medium | Low}` - Critical = the shipped artefact is unsafe or unusable (unverified update, two rustls providers linked, `panic = "abort"` under a live `catch_unwind` recovery path). High = the release cannot be produced or installed as designed (macOS cross-build assumed, unsigned Windows binary shipped to end users, machine-wide install with silent auto-update promised). Medium = a build that fails in CI for a fixable toolchain reason, or a profile setting working against the app's goal. Low = a size or build-time optimization with no behaviour change.
 
-Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Failure`.
+The band definitions govern; parenthesized items are examples, not an exhaustive list. Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Failure`.
 
-`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Failure`. `Evidence: incident` carries no cap - the reported event is the evidence.
 
 When a fix requires a paid membership, a certificate, or hardware the maintainer may not have, `Cost` names it explicitly rather than presenting the fix as free.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the design as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
 In review mode, close with exactly one status line, after any `Deferred:` lines:
 

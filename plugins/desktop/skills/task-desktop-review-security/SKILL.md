@@ -155,7 +155,7 @@ Every byte from a file the user did not author is attacker-controlled.
 
 ### Step 10 - Dependencies and Evidence
 
-- New dependencies: what they pull in transitively, whether the crate is maintained, and whether `cargo audit` reports an advisory
+- New dependencies: what they pull in transitively, whether the crate is maintained, and whether `cargo audit` reports an advisory. Where `cargo audit` cannot run (no toolchain, no network), record advisory status as unverified and name which crates to check first - never report a supply chain clean on a check that did not run
 - A dependency with a `build.rs` that runs arbitrary code at build time
 - `unsafe`-heavy dependencies on a parsing path
 - Known-dead crates: `sled` is unmaintained since 2021
@@ -221,7 +221,7 @@ The fence below delimits the template for display only. Emit the report body as 
 
 ## Dependency Graph Audit _(deep depth only)_
 
-[The added transitive subtree, `unsafe` usage on parsing paths, and build-script behaviour]
+[The added transitive subtree, `unsafe` usage on parsing paths, and build-script behaviour. `none - no dependency added or bumped; graph unchanged` when the change set adds none]
 
 ## Next Steps
 
@@ -258,6 +258,7 @@ The fence below delimits the template for display only. Emit the report body as 
 - Claiming `prevented` for a TOCTOU narrowing that only shrinks the window
 - Filing a hardcoded user-facing string as a security finding unless the string is a secret
 - Recommending a control that does not exist on a local-first app instead of stating accepted exposure
+- Reporting a dependency clean of advisories when `cargo audit` did not run
 - Performance findings - route them to the perf lens
 - Raising findings against `target/`, `dist/`, or generated bindings
 - Omitting `Reviewed, Not Filed` - an unexamined surface and a clean surface must be distinguishable

@@ -127,29 +127,30 @@ In a single-crate app with logic inline in `update()`, scope the fix to the feat
 
 ## Output Format
 
-When this skill produces a finding, each carries:
+When this skill produces a finding, each carries the block below; findings are ordered `[Must]` first:
 
 ```
-[Must|Recommend] {file:line | symbol, when source was supplied without paths}
+[Must|Recommend] {file:line | file - symbol, when the line is unknown | symbol, when source was supplied without paths}
 Boundary: <core -> UI | UI -> core | within core | within UI>
 Issue: <the violation, named>
 Why it matters: <what becomes untestable, or what will drift>
 Fix: <the concrete move or signature change>
 ```
 
-`core -> UI` covers any dependency from core toward the UI side, including a GUI-framework crate in the core manifest.
+`core -> UI` covers any dependency from core toward the UI side, including a GUI-framework crate in the core manifest. A UI-side re-declaration of a core type is `UI -> core`: the dependency that should exist is being dodged.
 
 `[Must]` when the boundary is breached mechanically (a GUI crate in core's manifest, core importing a UI type) or when preview and apply compute the plan in two places. `[Recommend]` for seams, type placement, and structure.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect owned by a sibling named in the ownership blockquote is written after the findings or the assessment form as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
-When designing a new layout or assessing an existing one, rather than reviewing a diff, produce instead:
+When designing a new layout or assessing an existing one, rather than reviewing a diff, produce instead the form below. A diff or concrete change set takes finding blocks; any other request - greenfield design, brownfield advice, "where should this live" - takes the form. For a greenfield design the form describes the target state.
 
 ```
 Workspace: <crates and their dependency edges>
 Core purity: <clean | `iced` present in core | no core crate>
 Seams: <injected capabilities, or `none - core reaches ambient state at <file:line>`>
 Misplaced: <each type in the wrong crate, with its destination | none>
+Next: <the scoped move this change makes and the trigger that promotes the boundary | none>
 ```
 
 ## Avoid

@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm the target machine and the input scale before reporting any number - "fast" on an NVMe developer laptop over 500 files says nothing about a 200k-file external drive, which is the case users complain about.
 >
-> This skill owns **cost**: what a scan, a hash, and a cold start cost the user. Parallel execution mechanics belong to `desktop-concurrency-patterns`; decode sizing to `desktop-image-processing`; traversal correctness to `desktop-filesystem-patterns`; cache schema and invalidation to `desktop-data-persistence`; whether the optimization is warranted at all to `desktop-overengineering-review`.
+> This skill owns **cost**: what a scan, a hash, and a cold start cost the user. Parallel execution mechanics belong to `desktop-concurrency-patterns`; decode sizing to `desktop-image-processing`; traversal correctness to `desktop-filesystem-patterns`; cache schema and invalidation to `desktop-data-persistence` (a missing or ineffective cache is still a `Caching` finding here); per-item failure typing to `rust-error-handling`; whether the optimization is warranted at all to `desktop-overengineering-review`.
 
 ## When to Use
 
@@ -200,7 +200,7 @@ In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 A symptom-only report is checkable input: emit `inferred` findings from it rather than the not-run line.
 
-When invoked from an implementation workflow rather than a review, emit a budget table instead of finding blocks (`Deferred:` lines still follow it):
+When invoked from an implementation workflow rather than a review, emit a budget table instead of finding blocks (`Deferred:` lines still follow it; no status line - budgets are authoring-shaped). Budget numbers are design targets, `estimated` until measured; say so once above the table:
 
 ```
 | Surface | Budget | Risk | Mitigation |

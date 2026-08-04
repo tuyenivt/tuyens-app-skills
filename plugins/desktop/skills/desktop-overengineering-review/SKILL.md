@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm the crate layout and the async runtime already in the workspace from `Cargo.toml` and `Cargo.lock` first. An established convention is context, not a finding - review what the diff adds against it.
 >
-> This skill owns **whether a layer earns its keep**. Where code lives and which way dependencies point belongs to `desktop-core-architecture`; Iced's Model-Message-Update-View shape to `iced-architecture-patterns`; ownership, borrowing, and idiom to `rust-language-patterns`; error type design to `rust-error-handling`; measured cost to `desktop-performance`.
+> This skill owns **whether a layer earns its keep**. Where code lives and which way dependencies point belongs to `desktop-core-architecture`; Iced's Model-Message-Update-View shape to `iced-architecture-patterns`; ownership, borrowing, and idiom to `rust-language-patterns`; error type design to `rust-error-handling`; measured cost to `desktop-performance`; GPU transfer-cost analysis to `desktop-gpu-compute`.
 
 ## When to Use
 
@@ -22,7 +22,7 @@ user-invocable: false
 
 - Every finding names what makes the abstraction unnecessary: one implementer and no test double, one instantiation, one thread, one call site, no measurement, the branch is unreachable. When several stack, comma-separate them in `Unnecessary because:`
 - Intent:
-  - **`[Recommend]`** (default). Name the constraint, recommend the edit. Escalate to **`[Must]`** when measurable cost is present; cite it in `Cost:`. Triggers: an abstraction that forces a test to spin an executor where a plain function call sufficed; a lock or channel whose contention or latency is measurable; a second async runtime in the process; a branch presented as handling a case it can never reach
+  - **`[Recommend]`** (default). Name the constraint, recommend the edit. Escalate to **`[Must]`** when measurable or structural cost is present; cite it in `Cost:`. In a design-only review with nothing to measure, the structural triggers below still escalate. Triggers: an abstraction that forces a test to spin an executor where a plain function call sufficed; a lock or channel whose contention or latency is measurable; a second async runtime in the process; a branch presented as handling a case it can never reach
   - **`[Recommend]`** when justification is plausible but not visible in the diff - state the assumption and ask the author to confirm
 - An abstraction with **visible** justification - a second implementer, a test double, a benchmark in the PR - is not a finding
 - **Scale is the discriminator, and scale is not domain.** Price an abstraction against the variation it absorbs: maintainer count, shipped platforms, supported file formats, locales, and runtime-selected backends. A solo-maintained two-platform file utility absorbs almost no variation and earns almost no layers; cite the project's actual numbers, not a general principle
@@ -193,7 +193,7 @@ One block per finding; the consuming workflow merges them:
 
 `Absent Structure` is the floor rule's category. Its `Cost:` is the edit-site count or the regression count already being paid, and that count is what escalates the block to `[Must]`.
 
-An abstraction examined and found justified is written before the per-category lines, one per line, so the reader can tell a defended layer from an unexamined one:
+Output order: finding blocks, then `Justified as-is:` lines, then the per-category zero-finding lines, then `Deferred:` lines. An abstraction examined and found justified is written one per line, so the reader can tell a defended layer from an unexamined one:
 
 ```
 Justified as-is: {abstraction} - {the visible justification: implementer count, the test double, the benchmark}
@@ -201,7 +201,7 @@ Justified as-is: {abstraction} - {the visible justification: implementer count, 
 
 This is the required form whenever the request questions an existing layer, since `No <category> findings.` alone reads as "nothing was checked" rather than "this was checked and it holds".
 
-For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran. Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the design is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
+For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran; append ` - not assessable from this input` when the input could not exercise that category (structure is unobservable from a design sketch). Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the design is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those at the end, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
@@ -209,7 +209,7 @@ A defect owned by a sibling named in the ownership blockquote is not emitted as 
 
 - Flagging a trait that a test double or a second implementation substitutes
 - Flagging `Arc<Mutex<>>` where an Iced task or a worker thread holds a second handle
-- Flagging `async` on a function that performs real I/O
+- Flagging `async` on a function that awaits real I/O - synchronous reads inside an `async fn` do not count
 - Flagging a channel that streams progress from a long-running operation
 - Flagging a cache, thread pool, or GPU path whose PR cites a benchmark
 - Flagging the runtime, crate layout, or error convention the workspace already standardized on, or proposing migration off it

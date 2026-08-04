@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm the UI framework is Iced before applying this skill - its central constraint is an Iced-specific platform gap, and the guidance is scoped to what remains achievable under it.
 >
-> This skill owns **usability without a mouse and without perfect vision**. Widget composition and layout belong to `iced-widget-patterns`; message and focus state plumbing to `iced-architecture-patterns`; translated strings and text expansion to `desktop-i18n`; keyboard-driven OS shortcuts to `desktop-platform-integration`.
+> This skill owns **usability without a mouse and without perfect vision**. Widget composition and layout belong to `iced-widget-patterns`; message and focus state plumbing to `iced-architecture-patterns`; translated strings and text expansion to `desktop-i18n`; keyboard-driven OS shortcuts to `desktop-platform-integration`; destructive-flow preview and undo semantics to `desktop-batch-operations`.
 
 ## When to Use
 
@@ -60,6 +60,8 @@ keyboard::on_key_press(|key, _| match key {
 The checklist per screen: Tab reaches every actionable control; Shift-Tab reverses in the same order; Enter or Space activates the focused control; `Esc` leaves the current context; arrow keys move within a list or grid; and no control is reachable only by hover or drag.
 
 Iced's `widget::focus_next` / `focus_previous` operate on the widget tree order, so **DOM-equivalent order is layout order**. A control positioned visually first but constructed last receives focus last, which is a real defect the eye does not catch - verify by tabbing, not by reading the code.
+
+List and grid rows are not focusable widgets in Iced. Arrow-key navigation is a **roving cursor held in app state**: the cursor row is drawn with the focus-indicator treatment and kept scrolled into view; Tab enters and leaves the list, arrows move within it.
 
 ### Focus indicators
 
@@ -114,7 +116,7 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 
 **Authoring mode** - the request is to write or design something. Emit the code or design, then any `Deferred:` lines. No finding blocks, no severity, no status line.
 
-**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding.
+**Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding, ordered by severity, Critical first.
 
 ```
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
@@ -126,17 +128,17 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 - Fix: {the concrete change}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = an action cannot be performed without a mouse, or a modal traps focus with no keyboard dismiss. High = a destructive or warning state carried by colour alone, focus that is invisible, or focus order that does not match visual order. Medium = contrast below the ratio table, layout breaking at 200% text scale, or a hit target under 24x24. Low = a missing tooltip on a labelled control, or an indicator that is visible but weak.
+`Severity: {Critical | High | Medium | Low}` - Critical = an action cannot be performed without a mouse, or a modal traps focus with no keyboard dismiss. High = a destructive or warning state carried by colour alone, focus that is invisible, focus order that does not match visual order, or a destructive confirm whose initial focus is the destructive action. Medium = contrast below the ratio table, layout breaking at 200% text scale, or a hit target under 24x24. Low = a missing tooltip on a labelled control, or an indicator that is visible but weak.
 
-Severity that does not fit a listed band: assign the nearest lower band and state why in `Barrier`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Barrier`.
+Severity that does not fit a listed band: assign the nearest lower band and state why in `Barrier`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Barrier`. `FocusTrap` covers dialog focus discipline generally: trap lifecycle, keyboard dismiss, initial focus, and restore on dismiss.
 
-`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block.
+`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Barrier`.
 
 When the report's scope includes screen-reader support, emit exactly one scope line before the findings: `Screen-reader support is out of scope - Iced exposes no accessibility tree (upstream issue #552, open since 2020) and this is not addressable in application code.` Never emit a finding whose fix is "add screen-reader support" or "integrate AccessKit".
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored output as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
-In review mode, close with exactly one status line, after any `Deferred:` lines:
+In review mode, after any `Deferred:` lines, close per this table - when findings were emitted there is no separate closing line:
 
 | Condition | Line |
 | --- | --- |

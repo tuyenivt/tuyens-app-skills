@@ -43,6 +43,8 @@ Read the **resolved** Iced version from `Cargo.lock` and state it. This project 
 
 When `Cargo.lock` is absent or unreadable, say so and ask rather than falling back to the manifest range - a range cannot answer whether an API exists.
 
+When the resolved version is known but its API surface cannot be consulted (offline, no vendored sources or docs), prefer APIs the project's existing code already exercises; every API introduced beyond that set is named in Deviations as unverified against the resolved version, never silently trusted from memory.
+
 Then confirm:
 
 | Concern | Confirm | If it differs |
@@ -63,7 +65,7 @@ Ask before writing code, grouped so each cluster surfaces its own follow-ups. Sk
 **Core**
 3. What the core crate owns, and what a single operation produces
 4. Whether the operation is destructive, and what its preview shows
-5. Undo: whether it is reversible, and what the reversal needs recorded
+5. Undo: whether it is reversible, what the reversal needs recorded, and whether undo must survive an app restart
 
 **Data**
 6. What persists, and whether the persisted shape changes
@@ -158,6 +160,7 @@ Read the actual output for the result. If a command is unavailable in this envir
 - Iced version differs from this plugin's guidance: verify each API against the project's version and say that you did
 - No core crate exists, or the existing one depends on `iced`: report at STEP 2 as the blocking design finding and scope the fix to **this feature only** - create the core crate for the types this feature adds, leave existing modules where they are, and say which files move. A whole-workspace re-layering is not this workflow's scope, and building logic into the UI crate because no core crate exists is not an option
 - Feature is non-destructive: the preview and undo requirements do not apply; say so rather than inventing an undo for a read-only operation
+- Destructive operation triggered by a watcher or rule rather than a user click: the confirmation surface is the rule's dry-run preview at configuration time, and undo records every applied event - per-event confirmation is not required. The Destructive Operations row names the configuration-time preview and the undo journal
 - Feature is pure presentation over existing core operations: STEP 3 produces nothing; say so rather than inventing a core layer
 - Feature needs a Gap capability (printing, file association, shell extension, drag-out): STEP 2 names the escape hatch or scopes the capability out; it is never implemented as if it works
 - No persistence and no OS capability: STEP 6 is skipped and said to be skipped

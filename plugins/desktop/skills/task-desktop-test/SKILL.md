@@ -112,7 +112,7 @@ Use `proptest` where an invariant is stronger than an example:
 - Plan generation is order-independent where the operation claims to be
 - A path confined to a root stays confined, for any generated component sequence including `..` and separators
 
-Use skill: `desktop-data-persistence` for migrations. **Every shipped schema version gets a fixture database and a test that migrates it forward to current.** These accumulate; an old version's fixture is never deleted, because an installed user may still be on it. A migration test that starts from the current schema tests nothing.
+Use skill: `desktop-data-persistence` for migrations. **Every shipped schema version gets a fixture database and a test that migrates it forward to current.** Construct a version fixture programmatically - the old version's DDL plus its `user_version` - unless a shipped binary artifact is itself the regression surface. These accumulate; an old version's fixture is never deleted, because an installed user may still be on it. A migration test that starts from the current schema tests nothing.
 
 ### Step 8 - Concurrency and Cancellation
 
@@ -145,6 +145,8 @@ Two practical notes: macOS runners bill at a 10x multiplier on private repos and
 
 Write the strategy. Write scaffolds when the request asked for tests to be written; a strategy or assessment question gets the plan and no unrequested files. Scaffolds are runnable test functions with real assertions, not `todo!()` stubs - a stub that compiles gives false coverage confidence. Plan-level unit scaffolds live in `#[cfg(test)]` modules beside the code they cover; tempdir-backed and cross-crate suites live in the crate's `tests/` directory.
 
+A test that pins intended behaviour against a defect this run found is written against the intent and `#[ignore]`d with the defect and its finding named in the ignore reason - never asserted green against the bug, never left failing in the suite.
+
 ## Output Format
 
 ```markdown
@@ -161,7 +163,7 @@ Write the strategy. Write scaffolds when the request asked for tests to be writt
 [one row per surface from Step 4's table that the project actually has]
 
 ## Findings
-[`[Must]` for an untested Critical surface, `[Recommend]` otherwise. Each with `file:line` and the case to cover. `none - all Critical surfaces covered` when there are none]
+[`[Must]` for an untested Critical surface, `[Recommend]` otherwise. Each with `file:line` and the case to cover. A production defect found while reading that is not itself a coverage gap is named inside the finding covering its surface, with a pointer to `task-desktop-review` for the review pass. `none - all Critical surfaces covered` when there are none]
 
 ## Test Plan
 | Layer | Count proposed | Covers |
@@ -179,7 +181,7 @@ Write the strategy. Write scaffolds when the request asked for tests to be writt
 [`n/a - no persisted schema` when there is none]
 
 ## CI Matrix
-[the matrix, per-job commands, and the cost note where the repo is private. `not proposed - CI already configured` when it is; `n/a - outside the request's scope` for a targeted request that does not include CI]
+[the matrix, per-job commands, and the cost note where the repo is private or its visibility cannot be determined locally. `not proposed - CI already configured` when it is; `n/a - outside the request's scope` for a targeted request that does not include CI]
 
 ## Determinism Risks
 [anything in the proposed suite that could flake, and what makes it deterministic. `none` when there are none]

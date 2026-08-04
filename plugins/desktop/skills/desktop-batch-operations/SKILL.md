@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm whether the operation is destructive before applying this skill - a read-only scan needs none of it, and inventing an undo for a filter is overhead.
 >
-> This skill owns **the semantics of applying a change to many files safely**. Where the plan type lives belongs to `desktop-core-architecture`; traversal and path mechanics to `desktop-filesystem-patterns`; TOCTOU and symlink escape to `desktop-security-patterns`; parallel execution to `desktop-concurrency-patterns`.
+> This skill owns **the semantics of applying a change to many files safely**. Where the plan type lives belongs to `desktop-core-architecture`; traversal and path mechanics to `desktop-filesystem-patterns`; TOCTOU and symlink escape to `desktop-security-patterns`; parallel execution to `desktop-concurrency-patterns`; journal schema and storage location to `desktop-data-persistence`.
 
 ## When to Use
 
@@ -23,7 +23,7 @@ user-invocable: false
 
 - **A destructive operation ships its preview and its undo in the same change.** Not as a follow-up
 - Preview and apply share one computation. Two implementations of the same naming rules will drift, and the drift is invisible until it destroys data
-- **The plan is validated again at apply time.** The tree may have changed since the preview
+- **The plan is validated again at apply time.** The tree may have changed since the preview. Benign drift is owned here; the adversarial race on the same window belongs to `desktop-security-patterns`
 - Every item reports its own outcome. A batch never returns one aggregate `Ok` for a run containing failures
 - A partially-applied batch is recoverable: the journal records what actually happened, not what was planned
 - Collision detection accounts for names the batch itself will create, not only names already on disk
@@ -122,6 +122,8 @@ The journal is written incrementally and durably where the batch is large enough
 
 Undo replays the journal in reverse. It is itself a batch operation and gets the same collision handling: the original name may have been taken since.
 
+A move that crosses volumes is copy-then-delete, not a rename - journal the copy and the delete as separate completions, so a crash between them leaves the file in at least one place, never neither.
+
 ### Per-item outcomes
 
 ```rust
@@ -149,10 +151,10 @@ For delete specifically, prefer the OS recycle bin (`trash` crate) over `fs::rem
 
 ## Output Format
 
-When this skill produces a finding:
+Two modes: source or a diff to judge takes finding blocks; a design, fix, or semantics request without source takes the design form below. In review mode, emit one block per finding, `[Must]` first:
 
 ```
-[Must|Recommend] {file:line | symbol, when source was supplied without paths}
+[Must|Recommend] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 Operation: <rename | move | delete | overwrite | copy>
 Gap: <preview | undo | preview-apply drift | apply-time revalidation | intra-batch collision | case-insensitive collision | rename cycle | partial-failure reporting | journal accuracy | journal durability | suffix rule>
 Consequence: <what the user loses, concretely>
@@ -163,7 +165,7 @@ Fix: <the concrete change>
 
 A destructive operation reviewed with no findings closes with exactly `No batch-operation findings.` A request about a read-only operation closes with exactly `Not applicable: operation is not destructive.` and nothing else - do not invent preview or undo requirements for it.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in design mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the design form as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
 When designing rather than reviewing:
 

@@ -82,9 +82,9 @@ Filter with `filter_entry` to prune whole subtrees (`.git`, `node_modules`, `$RE
 
 | Trap | What happens | Handling |
 | --- | --- | --- |
-| Reserved device names | `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9` cannot be created as files - with or without an extension (`NUL.txt` too) | Reject at plan time with a named reason, not at apply time as an opaque error |
+| Reserved device names | `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9` cannot be created as files - with or without an extension (`NUL.txt` too) | Reject at plan time with a named reason; the check applies to the segment before the first dot, case-insensitively, after trailing spaces are stripped |
 | Trailing dots and spaces | `report.` and `report ` are silently stripped by the Win32 layer, so the created name differs from the requested one | Normalize during planning and show the user the name that will actually exist |
-| `MAX_PATH` = 260 | Paths over 260 chars fail unless long-path support is on and the manifest opts in | Prefix with `\\?\` for absolute paths, or keep operations relative to a short root |
+| `MAX_PATH` = 260 | Paths over 260 chars fail unless long-path support is on and the manifest opts in (`longPathAware` in the application manifest) | Prefix with `\\?\` for absolute paths (canonicalizing the root once propagates it), or keep operations relative to a short root |
 | `\\?\` semantics | The prefix disables normalization entirely: no `/` translation, no `.`/`..` resolution, no relative paths | Canonicalize *before* prefixing, never after |
 | UNC paths | `\\server\share\...` becomes `\\?\UNC\server\share\...`, not `\\?\\\server\...` | Use `dunce` or `std::fs::canonicalize` plus explicit UNC handling; do not hand-build the prefix |
 | Case-insensitive, case-preserving | `Photo.jpg` and `photo.jpg` are one file with the stored casing preserved | Compare case-insensitively; preserve the user's casing when writing |
@@ -142,10 +142,10 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 **Authoring mode** - the request is to write traversal or path code. Emit the code, then any `Deferred:` lines. No finding blocks and no status line.
 
-**Review mode** - one block per finding:
+**Review mode** - one block per finding, ordered by severity, Critical first:
 
 ```
-### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
+### [Severity] {file:line | file:line-line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {PathEncoding | Traversal | WindowsPath | MacNormalization | LinkHandling | ErrorHandling | AtomicWrite | Comparison}
 - Platform: {Windows | macOS | both}
@@ -155,11 +155,11 @@ Two modes, chosen by whether something is being reviewed or authored.
 - Fix: {the concrete change}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = data loss or a wrong destructive target. High = files silently missed or an operation that fails on a common name. Medium = a platform-specific failure on an uncommon input. Low = correctness cleanup with no observed symptom.
+`Severity: {Critical | High | Medium | Low}` - Critical = data loss or a wrong destructive target. High = files silently missed, a walk aborted by a single per-entry error, or an operation that fails on a common name. Medium = a platform-specific failure on an uncommon input. Low = correctness cleanup with no observed symptom.
 
-`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `inferred` bounds the header at High and never raises a block.
+`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `inferred` bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Failure`.
 
-A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
+A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored code as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
 In review mode, close with exactly one status line, after any `Deferred:` lines:
 
