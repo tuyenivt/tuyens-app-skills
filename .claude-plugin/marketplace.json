@@ -10,7 +10,7 @@
       "name": "flutter",
       "source": "./plugins/flutter",
       "description": "Skills and agents for Flutter/Dart client development.",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenwork"
@@ -31,7 +31,7 @@
       "name": "unity",
       "source": "./plugins/unity",
       "description": "Skills and agents for Unity 2D game development.",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenwork"
@@ -52,7 +52,7 @@
       "name": "desktop",
       "source": "./plugins/desktop",
       "description": "Skills and agents for C#/Avalonia desktop utility development.",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenwork"
