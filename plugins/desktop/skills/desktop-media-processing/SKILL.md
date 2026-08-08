@@ -1,166 +1,150 @@
 ---
 name: desktop-media-processing
-description: Rust audio and video - symphonia decode, cpal/rodio I/O, FFI encode, and the FFmpeg LGPL-vs-GPL linking trap that decides commercial viability.
+description: .NET desktop audio and video - Media Foundation and AVFoundation first, FFmpeg LGPL dynamic fallback, hardware encode, NAudio limits.
 metadata:
   category: desktop
-  tags: [rust, audio, video, symphonia, cpal, rodio, ffmpeg, licensing, codecs, ffi]
+  tags: [csharp, dotnet, audio, video, media-foundation, avfoundation, ffmpeg, licensing, codecs, naudio]
 user-invocable: false
 ---
 
 # Desktop Media Processing
 
-> **The licensing decision is settled: LGPL.** FFmpeg is an LGPL build, dynamically linked, never `--enable-gpl`. This keeps the application's own licensing free and rules out x264 and x265, so software H.264/H.265 encode is replaced by hardware encoders. Treat this as a constraint to design within, not a choice to re-open.
+> **The default path is settled: the OS media APIs.** Windows Media Foundation / `Windows.Media` and macOS AVFoundation / VideoToolbox are free, hardware-accelerated, and their H.264/H.265 patent licensing is already paid by Microsoft and Apple. FFmpeg is the fallback for coverage the OS lacks - an LGPL build, dynamically linked, never `--enable-gpl`. Treat both as constraints to design within, not choices to re-open.
 >
-> This skill owns **audio and video pipelines and their licensing**. Still-image work belongs to `desktop-image-processing`; GPU pixel passes to `desktop-gpu-compute`; reading and writing media files on disk to `desktop-filesystem-patterns`; the decode/encode threading model to `desktop-concurrency-patterns`.
+> This skill owns **audio and video pipelines and their licensing**. Still-image work belongs to `desktop-image-processing`; reading and writing media files on disk to `desktop-filesystem-patterns`; the decode/encode threading model to `desktop-concurrency-patterns`; `async` mechanics to `csharp-async-patterns`; argument construction and spawning hygiene for external tool processes to `desktop-security-patterns`.
 
 ## When to Use
 
 - Adding audio playback, decode, analysis, or format conversion
 - Scoping any video feature, including "just extract a thumbnail"
-- Reviewing a diff that adds `symphonia`, `cpal`, `rodio`, `rsmpeg`, `ffmpeg-the-third`, or an FFI codec
+- Reviewing a diff that adds `FFmpeg.AutoGen`, `FFMediaToolkit`, `NAudio`, `LibVLCSharp`, or a `Windows.Media` reference
 
 ## Rules
 
-- **Audio decode is strong; video decode is FFI.** No pure-Rust H.264 or H.265 decoder exists. Any plan claiming otherwise is wrong
-- **Static linking is Cargo's ergonomic default and is wrong for LGPL compliance.** FFmpeg is dynamically linked here, always. Rust makes this trap worse than C++ does, because the correct choice is the one you have to go out of your way to make
-- **`--enable-gpl` is prohibited**, along with x264 and x265. It would make the whole application GPL, and there is no commercial FFmpeg license at any price. H.264/H.265 encode goes through **hardware encoders** - NVENC, QuickSync, AMF, VideoToolbox - with `rav1e` (AV1) as the software fallback. Trim and export without re-encode is an FFmpeg **remux** (stream copy) - no encoder involved; check whether remux covers the requirement before budgeting the encoder matrix
-- **Video sits behind a trait boundary from day one.** The binding lineage `ffmpeg` -> `ffmpeg-next` -> `ffmpeg-the-third` is three abandonments deep; the current binding will be abandoned too
-- `symphonia`'s **default features are royalty-free codecs only**. MP3 and AAC require explicit feature flags, and it is **decode-only by design** - no plan may assume it encodes
-- Budget a **multi-day spike** for FFmpeg build setup on Windows before estimating any video feature. vcpkg or prebuilt binaries, bindgen and LLVM, `PKG_CONFIG_PATH` - none of it is a one-afternoon task
+- **The OS media APIs are the default; FFmpeg is the fallback.** A plan that reaches for FFmpeg first names the format or need the OS APIs failed to cover. On Windows the WinRT APIs are high-level - this is not the raw COM other stacks would bind
+- **The OS path costs two implementations** - Media Foundation and AVFoundation. That is the real reason FFmpeg dominates in every language: it trades a licensing problem for a portability problem. State the trade explicitly when choosing; do not discover it as scope creep
+- **`--enable-gpl` with x264/x265 is prohibited.** It would make the whole application GPL. H.264/H.265 encode goes through hardware encoders - Media Foundation's vendor MFTs (NVENC / QuickSync / AMF) on Windows, VideoToolbox on macOS
+- When FFmpeg appears, it is an **LGPL build, dynamically linked**. P/Invoke is dynamic linking by default, which makes .NET a better fit for LGPL compliance than a static-by-default toolchain - the compliant choice is the one you get without trying
+- **Media sits behind an interface from day one.** Two OS implementations exist by design, so the seam has two implementers immediately - it is real, not ceremony
+- **Decode, playback, and analysis are different needs.** Pulling a playback library to get sample data drags in machinery that plays nothing
 
 ## Patterns
 
-### Audio: strong across the board
+### The default path: the OS already ships the codecs
 
-| Need | Crate | Note |
+| Need | Windows | macOS |
 | --- | --- | --- |
-| Decode | `symphonia` 0.6 (2026-05-15) | Pure safe Rust: MP3, AAC, FLAC, Vorbis, WAV, MP4, MKV. **Decode only** |
-| Device I/O | `cpal` | WASAPI and ASIO on Windows, CoreAudio on macOS |
-| Playback | `rodio` 0.22 | Sits on `cpal`; mixing and control |
-| Resampling | `rubato` | High quality, sample-rate conversion |
-| Plugins | `nih-plug` | Exports VST3 and CLAP, ships an Iced adapter |
+| Transcode / convert | `MediaTranscoder` (`Windows.Media.Transcoding`) | `AVAssetExportSession` |
+| Thumbnail / frame grab | `MediaComposition.GetThumbnailAsync` | `AVAssetImageGenerator` |
+| Metadata, duration | `Windows.Media` properties / Source Reader | `AVAsset` |
+| Hardware H.264/H.265 encode | Media Foundation MFTs - the OS picks NVENC / QuickSync / AMF | VideoToolbox |
+| Playback | `MediaPlayer` | `AVPlayer` |
 
-```toml
-# Bad - MP3 and AAC files silently fail to decode; only the royalty-free set is compiled in
-symphonia = "0.6"
+On Windows these are WinRT APIs, reached from .NET via CsWinRT with a `net10.0-windows10.0.19041.0`-style TFM. On macOS AVFoundation is reached via the macOS bindings or a thin native shim - that shim is part of the two-implementation cost, not a reason to abandon the path.
 
-# Good - the codecs you actually accept are named
-symphonia = { version = "0.6", features = ["mp3", "aac", "isomp4"] }
+```csharp
+// Bad - FFmpeg pulled in for an MP4 thumbnail on Windows; licensing discipline and DLL shipping bought for nothing
+var frame = FfmpegHelper.ExtractFrame(path, TimeSpan.FromSeconds(1));
+
+// Good - the OS API the codecs already live in
+var clip = await MediaClip.CreateFromFileAsync(file);
+var composition = new MediaComposition { Clips = { clip } };
+var thumb = await composition.GetThumbnailAsync(TimeSpan.FromSeconds(1), 0, 0, VideoFramePrecision.NearestFrame);
 ```
 
-Audio **encode** is FFI regardless: LAME for MP3, libopus (the cleanest license of the three), FDK-AAC (check the terms - **not GPL-compatible**).
+### When the fallback is earned
 
-### Decode is not playback, and neither is analysis
+| Situation | Path |
+| --- | --- |
+| Format the OS decodes (MP4, MOV, H.264, AAC, MP3) | OS media APIs |
+| Format coverage the OS lacks (full MKV, exotic codecs) | FFmpeg fallback |
+| One pipeline that must behave identically on both OSes | FFmpeg fallback, trade named |
+| Remux - trim or repackage without re-encode | FFmpeg stream copy; check whether remux covers the requirement before budgeting any encoder work |
 
-Three different needs get conflated into "play a file", and each has a different crate:
+### The FFmpeg fallback, and the discipline that still applies
 
-| Need | Reach for | Not |
+Bindings: `FFmpeg.AutoGen` (raw generated bindings) or `FFMediaToolkit` (higher-level frame access). Either way:
+
+- LGPL build, dynamically linked - P/Invoke already is. **Most convenient prebuilt Windows archives are GPL "full" builds; ship an LGPL shared build**, and record the source offer the LGPL requires
+- No `--enable-gpl`, no x264, no x265. Hardware encoders remain the encode path even inside FFmpeg (`h264_mf`, `hevc_videotoolbox`)
+- The native DLLs ship with the app; verify they load from the installed layout, not just from `bin/Debug`
+
+### Audio: name the need before the library
+
+| Need | Windows | Cross-platform |
 | --- | --- | --- |
-| Sample data for analysis, waveform, or conversion | `symphonia` directly | `rodio` - a second, differently-featured codec surface plus playback machinery you do not need |
-| Play a file to the default device | `rodio` 0.22 | raw `cpal` - you would rewrite mixing |
-| Capture input, or a custom output graph | `cpal` | `rodio` - it does not expose the device layer you need |
-| Change sample rate between two of the above | `rubato` | naive nearest-sample resampling |
+| Decode for analysis or waveform | NAudio `MediaFoundationReader` | FFmpeg fallback |
+| Playback | NAudio (WASAPI) | `LibVLCSharp` - heavyweight but LGPL, dynamically linked, fits the discipline |
+| Capture | NAudio (WASAPI capture) | Per-OS APIs; no strong cross-platform story - state it, do not imply one |
 
-Pulling `rodio` in for a waveform display decodes through rodio's own codec feature set - a second silent-failure surface independent of your `symphonia` features - and drags playback machinery into a path that plays nothing.
-
-### Video: the licensing decision comes first
-
-**This plugin's projects are LGPL: an FFmpeg LGPL build, dynamically linked, with no `--enable-gpl`.** The row below is the decided path, not a menu. It keeps the application's own licensing free - closed-source commercial or open-source, either remains available - which is exactly what `--enable-gpl` would foreclose.
-
-| Distribution model | Decode | Encode |
-| --- | --- | --- |
-| **LGPL - this plugin's default** | FFmpeg LGPL build, **dynamically linked** | Hardware encoder (NVENC / QuickSync / VideoToolbox), or AV1 via `rav1e` |
-| GPL-compatible / open source | FFmpeg any build | `--enable-gpl` with x264/x265 is available |
-| AV1 only, pure Rust | `rav1d` | `rav1e` |
-
-Choosing LGPL has one consequence to design around rather than discover: **x264 and x265 are unavailable**, so software H.264/H.265 encode is off the table. Hardware encoders cover it on both targets - NVENC and QuickSync on Windows, VideoToolbox on macOS - at the cost of a per-vendor code path and a software fallback that is AV1 (`rav1e`) rather than H.264. Decode is unaffected: the LGPL build decodes H.264 and H.265 normally.
-
-```toml
-# Bad - static FFmpeg in a closed-source app; LGPL obligations unmet, and it builds cleanly
-ffmpeg-the-third = { version = "*", features = ["static"] }
-
-# Good - dynamic link, pinned binding, and the decision recorded
-ffmpeg-the-third = { version = "3", default-features = false }   # links system LGPL FFmpeg
-```
-
-It builds and ships either way. Nothing in the toolchain warns you. That is what makes it expensive.
-
-### Put video behind a trait on day one
-
-```rust
-// Bad - rsmpeg types threaded through the app; the next binding abandonment is a rewrite
-pub fn thumbnail(path: &Path) -> Result<AVFrame> { /* rsmpeg all the way up */ }
-
-// Good - one owned type crosses the boundary; the binding lives behind it
-pub trait VideoSource {
-    fn frame_at(&mut self, ts: Duration) -> Result<RgbaFrame, MediaError>;
-    fn duration(&self) -> Duration;
-}
-// impl VideoSource for FfmpegSource - the only module that names the binding crate
-```
-
-This also isolates the FFmpeg build-environment pain to one crate rather than the whole workspace, and it makes a hardware-encoder swap a new impl instead of a refactor.
-
-### The Windows FFmpeg build spike
-
-Before any video estimate, run and record the outcome of:
-
-1. Acquire FFmpeg - vcpkg or a prebuilt LGPL shared build. Confirm shared, not static
-2. Install LLVM; `bindgen` needs `libclang` and will not say so clearly when it is missing
-3. Set `PKG_CONFIG_PATH` (or `FFMPEG_DIR`) so the `-sys` crate resolves headers and import libs
-4. Confirm the DLLs ship with the app and load from the installed layout, not just from the dev tree
-
-A spike that has not produced a running binary on a clean machine has not de-risked anything.
+- **NAudio is Windows-centric** - WASAPI, WaveOut, `MediaFoundationReader` do not exist on macOS. It is the right Windows-primary answer and the wrong cross-platform one
+- **`ManagedBass` is a licensing trap**: the BASS library it wraps requires a paid licence for commercial use. Name that before any technical merit
+- **Audio encode follows the same split as video**: the OS transcoder covers AAC on both platforms. MP3 or Opus encode means an FFI codec (LAME, libopus) - each names its own licence in the `Licensing:` line, and libopus carries the cleanest terms of the set
+- **`LibVLCSharp` ships FFmpeg-derived native libraries**, so the LGPL discipline and the `Licensing:` predicate apply to it exactly as they do to a direct FFmpeg binding
 
 ### Silent-failure modes specific to media
 
-- A `symphonia` feature omitted: the file opens, the probe finds no decoder, and the app shows an empty track rather than an error - surface the probe failure explicitly
-- Dynamic FFmpeg with DLLs absent from the installed layout: works in `cargo run`, fails on the user's machine at first video open
-- `cpal` device disconnection mid-stream: the stream stops silently unless the error callback is wired
+- **Windows N editions lack the Media Feature Pack**, so Media Foundation is absent entirely. Catch the failure on first use and degrade with a message, not a crash
+- **H.265 decode is not guaranteed on Windows** - the HEVC Video Extensions package is a paid Store item. Probe, then route H.265 files to the fallback or report clearly
+- **FFmpeg DLLs absent from the installed layout**: works in `dotnet run`, dies on the user's machine at first video open
+- **Hardware encode is not guaranteed**: Media Foundation silently falls back to a software MFT when the vendor encoder is unavailable (VMs, stale drivers) - same output, minutes slower. Log which encoder ran
+
+### The interface boundary
+
+```csharp
+// Bad - WinRT types threaded through the app; the macOS implementation now has no seam
+public Task<SoftwareBitmap> GetThumbnailAsync(string path);
+
+// Good - one owned type crosses; each implementation is the only class naming its API
+public interface IVideoSource
+{
+    Task<RgbaFrame> GetFrameAsync(TimeSpan at);
+    TimeSpan Duration { get; }
+}
+// MediaFoundationSource, AvFoundationSource, FfmpegSource
+```
+
+This is also what keeps the FFmpeg fallback a swap instead of a rewrite, and confines each OS API to one project.
 
 ## Output Format
 
-Per finding:
+Per finding, when reviewing code:
 
 ```
-[Must | Recommend] {file:line | Cargo.toml | symbol, when source was supplied without paths}
-Area: {Licensing | Codec Coverage | Binding Longevity | Build Environment | Runtime Failure}
+[Must | Recommend] {file:line | csproj | symbol, when source was supplied without paths}
+Area: {Licensing | Codec Coverage | Platform Coverage | Binding Longevity | Runtime Failure}
 Issue: {the defect, named}
 Exposure: {for Licensing: the obligation triggered and who it binds; otherwise the user-visible failure}
-Fix: {concrete manifest, trait, or packaging edit}
+Fix: {concrete code, csproj, or packaging edit}
 ```
 
-`Area: Licensing` findings are always `[Must]`. No other area is escalated without a measurement or a reproduced failure - and a deterministic silent failure readable from the manifest (a codec feature missing while that input is accepted, DLLs absent from the installed layout) counts as reproduced.
+`Area: Licensing` findings are always `[Must]`. No other area is escalated without a measurement or a reproduced failure - and a deterministic silent failure readable from the project (a GPL build bundled, DLLs absent from the installed layout, H.265 accepted with no decoder probe) counts as reproduced. A missing interface boundary files as `Binding Longevity`.
 
 A defect owned by a sibling named in the ownership blockquote is written after the findings or the scoping form as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none. A review that produces no finding closes with exactly `No media findings.`
 
-When scoping a media feature rather than reviewing code, produce instead the form below - one form per scope; when audio and video paths coexist, a field carries one line per path:
+When scoping a media feature rather than reviewing code, produce instead the form below - one form per scope; when several needs coexist, a field carries one line per need:
 
 ```
 Media type: {audio | video | both}
-Licensing: {LGPL - dynamic link, no --enable-gpl, whenever FFmpeg appears | FFI codec licenses as listed in License obligations, for FFI without FFmpeg | n/a - pure Rust path}
-Decode path: {crate + features, or FFI binding + link mode}
-Encode path: {crate, FFI library, hardware encoder, or `none - decode only`}
-Link mode: {dynamic | n/a} - required whenever FFmpeg appears; `static` is a defect, not an option
-License obligations: {each triggered obligation - the LGPL relink provision, the shared-library shipping layout, the source offer}
-Hardware encoder coverage: {per target, with the software fallback | `n/a - no video encode path`}
-Trait boundary: {the owned type crossing it, or `absent - defect`}
-Build spike: {completed on {date} | required, {estimate} | `not required - no FFmpeg in this path`}
+Path: {OS media APIs | FFmpeg fallback | mixed - which need takes which path}
+Licensing: {LGPL - dynamic link via P/Invoke, no --enable-gpl, source offer recorded - when FFmpeg or any FFI codec is in the path | n/a - OS media APIs only}
+Decode path: {OS API per platform, or binding + FFmpeg build variant}
+Encode path: {OS transcoder, hardware encoder, or `none - decode only`}
+Platform coverage: {per target, with the fallback or degradation when one OS lacks the codec}
+Interface boundary: {the owned type crossing it, or `absent - defect`}
 ```
 
-`Licensing` is fixed, not a question, whenever FFmpeg appears in either path - a scope emitting anything other than the LGPL line then has departed from the plugin's decision and states why in `License obligations`. FFI codecs without FFmpeg (libopus, LAME) are not LGPL-bound by decree; their own licenses are named in `License obligations`. A pure-Rust path (`symphonia` decode, `rav1e`/`rav1d`) writes the `n/a` form.
+`Licensing:` is a predicate, not a fixed value: the LGPL discipline line applies exactly when FFmpeg or an FFI codec library is in the path, and is `n/a - OS media APIs only` otherwise. A non-FFmpeg FFI codec (LAME, libopus) names its own licence on the same line.
 
 ## Avoid
 
-- Assuming a pure-Rust H.264 or H.265 decoder exists
-- Statically linking FFmpeg
-- `--enable-gpl`, x264, or x265 anywhere in the build
-- Planning software H.264/H.265 encode, which LGPL rules out - hardware encoders and `rav1e` are the available paths
-- Shopping for a commercial FFmpeg license - none exists
-- `symphonia` with default features when MP3 or AAC input is accepted
-- Planning encode on `symphonia`
-- FFmpeg binding types appearing in application code outside the adapter module
-- Two FFmpeg binding crates coexisting in one workspace
-- Estimating a video feature before the Windows build spike has produced a running binary
-- Treating FDK-AAC as license-equivalent to libopus
-- Shipping dynamic FFmpeg without verifying the DLLs load from the installed layout
+- Reaching for FFmpeg first when the OS API covers the format - and reaching for it silently, without naming the trade
+- `--enable-gpl`, x264, or x265 anywhere in any build
+- Bundling a prebuilt GPL "full" FFmpeg archive because it was the first download link
+- Statically linking FFmpeg or an FFI codec into a closed-source binary
+- Treating NAudio as the cross-platform audio answer
+- `ManagedBass` in a commercial app without a purchased BASS licence
+- Assuming H.265 decode or Media Foundation itself is present on every Windows machine
+- OS-specific media types (`SoftwareBitmap`, `AVAsset`) appearing outside their adapter implementation
+- Shipping FFmpeg DLLs without verifying they load from the installed layout
+- Conflating decode, playback, and analysis into one library choice

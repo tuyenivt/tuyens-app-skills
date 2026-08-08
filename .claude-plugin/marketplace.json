@@ -51,20 +51,21 @@
     {
       "name": "desktop",
       "source": "./plugins/desktop",
-      "description": "Skills and agents for Rust desktop utility development with Iced.",
+      "description": "Skills and agents for C#/Avalonia desktop utility development.",
       "version": "1.5.0",
       "author": {
         "name": "Tuyen",
         "url": "https://github.com/tuyenwork"
       },
       "tags": [
-        "rust",
-        "iced",
+        "csharp",
+        "dotnet",
+        "avalonia",
         "desktop",
         "windows",
         "macos",
         "file-utility",
-        "native"
+        "mvvm"
       ]
     }
   ]

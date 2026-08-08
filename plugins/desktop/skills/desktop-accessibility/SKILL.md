@@ -1,81 +1,118 @@
 ---
 name: desktop-accessibility
-description: Make Iced desktop apps usable without a mouse - keyboard reach, focus order and indicators, contrast, OS text scaling, non-colour meaning.
+description: Make Avalonia apps accessible - AutomationProperties names, custom peers, NVDA and Narrator smoke tests, keyboard reach, focus, contrast, scaling.
 metadata:
   category: desktop
-  tags: [accessibility, a11y, iced, keyboard-navigation, focus, contrast, text-scaling, screen-reader-gap, accesskit]
+  tags: [accessibility, a11y, avalonia, automation-peer, uia, nsaccessibility, screen-reader, keyboard-navigation, focus, contrast, text-scaling]
 user-invocable: false
 ---
 
 # Desktop Accessibility
 
-> Confirm the UI framework is Iced before applying this skill - its central constraint is an Iced-specific platform gap, and the guidance is scoped to what remains achievable under it.
+> Confirm the UI framework is Avalonia 11 or later before applying this skill - the guidance assumes its UI Automation and NSAccessibility bridges exist, and it names the specific places where they still fray.
 >
-> This skill owns **usability without a mouse and without perfect vision**. Widget composition and layout belong to `iced-widget-patterns`; message and focus state plumbing to `iced-architecture-patterns`; translated strings and text expansion to `desktop-i18n`; keyboard-driven OS shortcuts to `desktop-platform-integration`; destructive-flow preview and undo semantics to `desktop-batch-operations`.
+> This skill owns **usability without a mouse, without perfect vision, and with a screen reader**. Control composition and layout belong to `avalonia-control-patterns`; command and focus-state plumbing to `avalonia-mvvm-patterns`; translated strings and text expansion to `desktop-i18n`; OS-level shortcuts to `desktop-platform-integration`; destructive-flow preview and undo semantics to `desktop-batch-operations`.
 
 ## When to Use
 
-- Adding or reviewing any interactive widget, dialog, or modal
+- Adding or reviewing any interactive control, dialog, or modal
+- Writing a custom-drawn control, or a screen built on DataGrid or custom text editing
 - Choosing colours that carry meaning (status, validation, diff, selection)
 - Sizing text, buttons, list rows, or icon-only controls
-- Designing a flow whose only affordance is click or hover
-- Reviewing a screen for keyboard reachability
+- Reviewing a screen for keyboard or screen-reader usability
 
 ## Rules
 
-- **Iced has no screen-reader support, and this cannot be fixed in application code.** Iced does not consume AccessKit; there is no accessibility tree, no role, no name, and no announcement. Issue #552 has been open since October 2020. Every recommendation in this skill is a mitigation within that constraint
-- **Do not assert that Iced 0.14 added accessibility hooks.** Several third-party 2026 articles claim this. It is not in the release notes and no such API exists. Do not restate the claim and do not build on it
-- **Do not propose an AccessKit integration.** The framework has no consumption point for it. Proposing one produces work that cannot compile against the framework. `egui` and `slint` do consume AccessKit - naming them is how a framework-swap tradeoff is stated, not a fix to apply downstream
-- **Every action is reachable and operable by keyboard alone.** An action available only via click, hover, right-click, or drag is inaccessible with no workaround in this stack
-- **Focus is always visible.** A focus indicator that relies on a subtle background shift, or is drawn only on hover, is not an indicator
+- **Avalonia has real screen-reader support; hold the app to it.** AutomationPeers map to UI Automation on Windows and NSAccessibility on macOS, shipped since v11 (July 2023; AT-SPI2 on Linux since v12). NVDA, Narrator, and VoiceOver work with Avalonia apps - never scope screen readers out of an accessibility review on this stack
+- **Every interactive control has an accessible name**: `AutomationProperties.Name`, a `LabeledBy` reference, or text content the peer already surfaces. An icon-only button without one announces as "button"
+- **A custom-drawn control overrides `OnCreateAutomationPeer`** or it does not exist to assistive technology: no role, no name, no state
+- **Peers existing does not imply usability - smoke test with a real screen reader.** Known gaps: TextBox caret movement is not announced while arrowing through text (issue #9770), and DataGrid keyboard accessibility is weak (discussion #10175). Composite controls are where support frays; buttons, lists, checkboxes, and menus are solid
+- **Every action is reachable and operable by keyboard alone.** An action available only via click, hover, right-click, or drag is inaccessible
+- **Focus is always visible**, and focus order matches visual order
 - Colour never carries meaning alone. Every colour-coded state also carries text, an icon, or a shape
-- Text scales with the OS setting rather than being pinned to a fixed pixel size, and the layout holds at the larger size
-- A modal traps focus for its lifetime and returns focus to the invoking control on dismiss. `Esc` always dismisses
+- Text scales with the OS setting rather than being pinned to fixed pixel sizes, and the layout holds at 200%
+- A modal traps focus for its lifetime, `Esc` always dismisses, and focus returns to the invoking control on close
 
 ## Patterns
 
-### State the platform gap, once, accurately
+### The support statement, stated accurately
 
 When accessibility scope is discussed, the honest statement is:
 
-> Iced exposes no accessibility tree. Screen readers (NVDA, JAWS, VoiceOver) see an empty window. This is a framework-level exclusion, tracked upstream since 2020, and is not addressable from application code. The app targets keyboard, contrast, scaling, and non-colour affordances; blind-user support requires a different UI framework.
+> Avalonia exposes an accessibility tree: AutomationPeers map to UI Automation on Windows and NSAccessibility on macOS. NVDA, Narrator, and VoiceOver announce standard controls. Known gaps: TextBox caret movement is not announced while arrowing (#9770), and DataGrid keyboard access is weak (#10175). Standard controls are solid; composite and custom controls are verified by testing, not assumed.
 
-That is a scope declaration, not a defence. It belongs in the project's accessibility statement so the exclusion is a known decision rather than an unnoticed one. Repeating it as a header on every finding is noise - say it once.
+Both misclaims are defects: asserting no support (true of some desktop GUI stacks, stale here) scopes out users the stack can serve; asserting parity with mature native toolkits hides exactly the gaps the smoke test exists to catch.
 
-### Keyboard reachability
+### Names for assistive technology
 
-```rust
-// Bad - the only way to remove a row; no keyboard path at all
-mouse_area(row).on_right_press(Message::Remove(id))
+```xml
+<!-- Bad - Narrator announces "button"; the user hears nothing about what it does -->
+<Button Command="{Binding RemoveCommand}">
+  <PathIcon Data="{StaticResource TrashIcon}"/>
+</Button>
 
-// Good - a focusable control plus a key binding on the focused row
-row![ label, button(icon::trash()).on_press(Message::Remove(id)) ]
-// and, in subscription:
-keyboard::on_key_press(|key, _| match key {
-    Key::Named(Named::Delete) => Some(Message::RemoveFocused),
-    _ => None,
-})
+<!-- Good - a spoken name for AT, a tooltip for sighted users -->
+<Button Command="{Binding RemoveCommand}"
+        AutomationProperties.Name="Remove file"
+        ToolTip.Tip="Remove file">
+  <PathIcon Data="{StaticResource TrashIcon}"/>
+</Button>
 ```
 
-The checklist per screen: Tab reaches every actionable control; Shift-Tab reverses in the same order; Enter or Space activates the focused control; `Esc` leaves the current context; arrow keys move within a list or grid; and no control is reachable only by hover or drag.
+- `AutomationProperties.Name` is what is spoken; `HelpText` adds a longer description read on demand; `LabeledBy` points a control at an existing visible label instead of duplicating the string
+- `AutomationProperties.AutomationId` is for UI tests. It is never spoken and does not substitute for a `Name`
+- Names are localized resources (`desktop-i18n`) - a translated UI with English automation names is half translated
+- State the user must learn about (scan finished, conflicts found) needs a control that announces or can be focused and read - a repaint of a coloured region tells a screen reader nothing; verify the announcement in the smoke test
 
-Iced's `widget::focus_next` / `focus_previous` operate on the widget tree order, so **DOM-equivalent order is layout order**. A control positioned visually first but constructed last receives focus last, which is a real defect the eye does not catch - verify by tabbing, not by reading the code.
+### Custom controls need a peer
 
-List and grid rows are not focusable widgets in Iced. Arrow-key navigation is a **roving cursor held in app state**: the cursor row is drawn with the focus-indicator treatment and kept scrolled into view; Tab enters and leaves the list, arrows move within it.
+```csharp
+// Bad - custom-drawn thumbnail grid; assistive tech sees one opaque rectangle
+public class ThumbnailGrid : Control { /* custom rendering */ }
 
-### Focus indicators
-
-```rust
-// Bad - focus differs from rest by a 4% background lift; invisible on a laptop panel
-fn focused(t: &Theme) -> Style { Style { background: t.palette().background.scale(1.04).into(), ..base(t) } }
-
-// Good - a border that changes width and colour, so it survives low contrast and colour blindness
-fn focused(t: &Theme) -> Style {
-    Style { border: Border { width: 2.0, color: t.palette().primary, radius: 4.0.into() }, ..base(t) }
+// Good - the control describes its role, name, and children to AT
+public class ThumbnailGrid : Control {
+    protected override AutomationPeer OnCreateAutomationPeer()
+        => new ThumbnailGridPeer(this);  // ControlAutomationPeer subclass: role, name, items, selection
 }
 ```
 
-The indicator must be visible in both light and dark themes and must not be the same treatment as hover - a user tabbing needs to distinguish "focused" from "the mouse happens to be here".
+Before writing a custom control at all, compose standard ones - `ListBox` and friends carry working peers and keyboard handling for free; the composition choice belongs to `avalonia-control-patterns`. A peer that lies (announces a list but exposes no items) fails the smoke test as surely as no peer.
+
+### Keyboard reachability
+
+```xml
+<!-- Bad - the only way to remove a row is a pointer handler -->
+<Border PointerReleased="OnRightClickRemove"> ... </Border>
+
+<!-- Good - selection plus a key binding; the pointer path can stay -->
+<ListBox ItemsSource="{Binding Files}" SelectionMode="Multiple">
+  <ListBox.KeyBindings>
+    <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}"/>
+  </ListBox.KeyBindings>
+</ListBox>
+```
+
+The checklist per screen: Tab reaches every actionable control; Shift-Tab reverses in the same order; Enter or Space activates the focused control; `Esc` leaves the current context; arrow keys move within a list or grid; and nothing is reachable only by hover or drag.
+
+Default tab order follows the visual tree, so a control constructed out of visual order tabs out of order - fix the tree; `TabIndex` is the override of last resort. `IsTabStop="False"` removes stops that carry no action. Verify by tabbing, not by reading the XAML.
+
+### Focus indicators
+
+```xml
+<!-- Bad - focus differs from rest by a 4% background lift; invisible on a laptop panel -->
+<Style Selector="Button:focus">
+  <Setter Property="Background" Value="#0A000000"/>
+</Style>
+
+<!-- Good - a border change that survives low contrast and colour blindness -->
+<Style Selector="Button:focus-visible">
+  <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}"/>
+  <Setter Property="BorderThickness" Value="2"/>
+</Style>
+```
+
+`:focus-visible` fires for keyboard focus, which is the case the indicator serves. It must be visible in both light and dark themes and must differ from hover - a user tabbing needs to distinguish "focused" from "the mouse happens to be here".
 
 ### Contrast and non-colour meaning
 
@@ -86,29 +123,33 @@ The indicator must be visible in both light and dark themes and must not be the 
 | Icons, focus rings, control borders | 3:1 |
 | Disabled text | Exempt from the ratio, but must still read as disabled |
 
-Verify against the actual theme palette in both light and dark, not against a design mock.
+```xml
+<!-- Bad - the only signal that a rename will fail is a red row -->
+<TextBlock Text="{Binding Name}" Foreground="{Binding ConflictBrush}"/>
 
-```rust
-// Bad - the only signal that a rename will fail is a red row
-row.style(if item.conflicts { red } else { normal })
-
-// Good - colour plus an icon plus text; readable in greyscale
-row![ if item.conflicts { icon::warning() } else { icon::blank() },
-      text(&item.name),
-      text(if item.conflicts { "name taken" } else { "" }) ]
+<!-- Good - icon plus text plus colour; survives greyscale and is announced -->
+<StackPanel Orientation="Horizontal">
+  <PathIcon IsVisible="{Binding HasConflict}" Data="{StaticResource WarnIcon}"/>
+  <TextBlock Text="{Binding Name}"/>
+  <TextBlock IsVisible="{Binding HasConflict}" Text="name taken"/>
+</StackPanel>
 ```
 
-Roughly 8% of men have a colour vision deficiency. For a batch rename tool the colour-only case is specifically dangerous: the user confirms a destructive apply without perceiving the warning.
+Roughly 8% of men have a colour vision deficiency, and a colour-only warning is also invisible to a screen reader. For a batch rename tool this case is specifically dangerous: the user confirms a destructive apply without perceiving the warning.
 
 ### Text scaling and hit targets
 
-Read the OS text scale at startup and apply it as a factor over the base size rather than hardcoding `size(14)` everywhere. Then verify the layout at 200%: fixed-height rows clip descenders, fixed-width buttons truncate labels, and single-line containers hide content entirely. Combine with the longest locale (`desktop-i18n`) - that is the real worst case, not either axis alone.
+Apply the OS text scale as a factor over base sizes rather than hardcoding `FontSize="12"` everywhere, then verify the layout at 200%: fixed-height rows clip descenders, fixed-width buttons truncate labels, single-line containers hide content entirely. Combine with the longest shipped locale (`desktop-i18n`) - that is the real worst case, not either axis alone.
 
-Hit targets: 24x24 logical pixels minimum for any clickable control, 32x32 for primary actions and icon-only buttons. Icon-only controls also need a tooltip, since with no accessibility tree the tooltip is the only name the control has - and a tooltip that appears on hover only is unreachable by keyboard, so the label must also exist somewhere the keyboard user can read.
+Hit targets: 24x24 logical pixels minimum for any clickable control, 32x32 for primary actions and icon-only buttons. Icon-only controls carry both a tooltip and an `AutomationProperties.Name` - the tooltip serves the sighted mouse user, the name serves everyone else.
 
 ### Dialogs and focus traps
 
-A modal takes focus on open, cycles Tab within itself, and restores focus to the control that opened it on close. **The one thing worse than no trap is a permanent trap**: a dialog that captures Tab but offers no keyboard-reachable dismiss strands the user with no way out but killing the process. `Esc` dismisses, always, and the destructive-confirm dialog defaults focus to the safe choice (Cancel), not to Apply.
+A modal takes focus on open, cycles Tab within itself, and restores focus to the control that opened it on close. **The one thing worse than no trap is a permanent trap**: a dialog that captures Tab but offers no keyboard-reachable dismiss strands the user. `Esc` dismisses, always, and the destructive-confirm dialog defaults focus to the safe choice (Cancel), never Apply.
+
+### The screen-reader smoke test
+
+Before a screen is called accessible, walk it with NVDA or Narrator on Windows (VoiceOver on macOS): every interactive control announces a role and a name; Tab order matches visual order; the state changes the flow depends on (preview ready, conflicts found, batch complete) are announced or reachable; and the whole rename or dedup flow completes without touching the pointer. Screens built on the known-gap surfaces - DataGrid, custom text editing - are tested first, because that is where peers exist and usability still fails.
 
 ## Output Format
 
@@ -119,22 +160,22 @@ Two modes, chosen by whether the request supplies code to judge or asks for code
 **Review mode** - source, a diff, or a symptom report was supplied. Emit one block per finding, ordered by severity, Critical first.
 
 ```
-### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
+### [Severity] {file:line | file, when the line is unknown | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
-- Category: {KeyboardReach | FocusOrder | FocusIndicator | FocusTrap | Contrast | ColourOnly | TextScaling | HitTarget | MissingLabel}
-- Evidence: {source | inferred (state what was not seen)}
-- Code: {one-line citation, or `not supplied` when the finding is inferred}
-- Barrier: {who is blocked and from what - "keyboard-only user cannot remove a queued file"}
+- Category: {MissingName | PeerGap | KeyboardReach | FocusOrder | FocusIndicator | FocusTrap | Contrast | ColourOnly | TextScaling | HitTarget}
+- Evidence: {tested (name the screen reader and the screen walked - a named tester's reported session counts) | source (a prose description of the implementation counts; quote it in Code:) | inferred (state what was not seen)}
+- Code: {one-line citation, or `not supplied` when the finding is tested or inferred}
+- Barrier: {who is blocked and from what - "an NVDA user cannot tell which rows conflict"}
 - Fix: {the concrete change}
 ```
 
-`Severity: {Critical | High | Medium | Low}` - Critical = an action cannot be performed without a mouse, or a modal traps focus with no keyboard dismiss. High = a destructive or warning state carried by colour alone, focus that is invisible, focus order that does not match visual order, or a destructive confirm whose initial focus is the destructive action. Medium = contrast below the ratio table, layout breaking at 200% text scale, or a hit target under 24x24. Low = a missing tooltip on a labelled control, or an indicator that is visible but weak.
+`Severity: {Critical | High | Medium | Low}` - Critical = an action cannot be performed without a mouse, a modal traps focus with no keyboard dismiss, or a primary flow runs through a control invisible to assistive technology (no peer, no name, no alternative). High = a missing accessible name on an interactive control, a custom control without a peer off the primary flow, a destructive or warning state carried by colour alone, focus that is invisible, focus order diverging from visual order, or a known-gap surface (#9770, #10175) shipped without a smoke test. Medium = contrast below the ratio table, layout breaking at 200% text scale, a hit target under 24x24, or `AutomationId` standing in for a `Name`. Low = a missing tooltip on a named control, or an indicator that is visible but weak.
 
-Severity that does not fit a listed band: assign the nearest lower band and state why in `Barrier`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Barrier`. `FocusTrap` covers dialog focus discipline generally: trap lifecycle, keyboard dismiss, initial focus, and restore on dismiss.
+Severity that does not fit a listed band: assign the nearest lower band and state why in `Barrier`. `Category` takes exactly one value - where a defect fits two, pick the one the `Fix` addresses and name the other in `Barrier`. Repeated instances of the same defect in one file merge into one block with every location named. `PeerGap` covers both a custom control with no peer and a framework gap surface shipped untested. `FocusTrap` covers dialog focus discipline generally: trap lifecycle, keyboard dismiss, initial focus, and restore on dismiss.
 
-`Evidence: inferred` is required whenever the source was not read. It bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Barrier`.
+`Evidence: inferred` is required whenever neither source nor a screen-reader run informed the finding. It bounds the header at High and never raises a block; when the cap lowers a would-be Critical, say so in `Barrier`. A claim that a screen *works* with a screen reader requires `tested` evidence - `source` proves peers exist, not that they are usable.
 
-When the report's scope includes screen-reader support, emit exactly one scope line before the findings: `Screen-reader support is out of scope - Iced exposes no accessibility tree (upstream issue #552, open since 2020) and this is not addressable in application code.` Never emit a finding whose fix is "add screen-reader support" or "integrate AccessKit".
+When the request's scope includes screen-reader support - in either mode - emit exactly one scope line before the findings or the authored output: `Screen-reader support is in scope - Avalonia maps AutomationPeers to UI Automation and NSAccessibility; known gaps: TextBox caret announcement (#9770), DataGrid keyboard access (#10175).` Never emit a finding claiming screen-reader support is impossible on this stack, and never close a screen as accessible on peer presence alone.
 
 A defect - or, in authoring mode, out-of-scope work the deliverable depends on - owned by a sibling named in the ownership blockquote is written after the findings or the authored output as `Deferred: {item} -> {owning skill}`, one per line. Omit when there are none.
 
@@ -148,17 +189,18 @@ In review mode, after any `Deferred:` lines, close per this table - when finding
 
 ## Avoid
 
-- Stating or implying that Iced supports screen readers
-- Repeating the third-party claim that Iced 0.14 added accessibility hooks
-- Proposing an AccessKit integration for Iced
-- Filing a finding whose fix the framework cannot accept
+- Stating that Avalonia lacks screen-reader support, or scoping assistive technology out of a review
+- Calling a screen screen-reader usable because peers exist, without an NVDA or Narrator pass
+- Icon-only controls with no `AutomationProperties.Name`
+- `AutomationId` treated as a spoken name
+- English automation names in a localized UI
+- A custom-drawn control with no `AutomationPeer`
+- Shipping DataGrid-heavy or custom-text-editing screens without testing the known gaps (#9770, #10175)
 - An action reachable only by click, hover, right-click, or drag
 - Construction order that diverges from visual order, so Tab jumps around the screen
 - A focus indicator distinguished only by a background tint, or identical to hover
 - Colour as the sole carrier of a warning, error, or conflict state
-- Hardcoded text sizes that ignore the OS scale setting
 - Fixed-height rows or fixed-width buttons verified only at 100% scale
-- Icon-only controls whose only name is a hover tooltip
 - Hit targets under 24x24 logical pixels
 - A modal that traps Tab but has no keyboard dismiss
 - A destructive confirm dialog with initial focus on the destructive action

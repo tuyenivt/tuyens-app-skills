@@ -1,9 +1,9 @@
 ---
 name: desktop-ecosystem-boundaries
-description: Rust desktop capability register - what is a hard gap (printing, shell extensions, drag-out), what silently no-ops, and the escape hatch for each.
+description: Capability register for .NET/Avalonia desktop - hard gaps, silent no-op traps, the Avalonia paid-tier boundary, and escape hatches.
 metadata:
   category: desktop
-  tags: [rust, iced, ecosystem, crates, feasibility, platform-gaps, silent-failure, escape-hatch]
+  tags: [csharp, dotnet, avalonia, ecosystem, nuget, feasibility, platform-gaps, silent-failure, nativeaot, escape-hatch]
 user-invocable: false
 ---
 
@@ -11,22 +11,23 @@ user-invocable: false
 
 > Load this **before** feature design, not after. A requirement that lands on a hard gap must be renegotiated at design time; discovering it mid-implementation costs the whole implementation.
 >
-> This skill owns **whether a capability is reachable at all, and at what cost**. Which crate to hold a chosen capability's data belongs to `desktop-data-persistence`; how to call the OS once a capability is confirmed reachable to `desktop-platform-integration`; whether a reachable capability is worth building to `desktop-overengineering-review`.
+> This skill owns **whether a capability is reachable at all, and at what cost**. Which store holds a chosen capability's data belongs to `desktop-data-persistence`; how to call the OS once a capability is confirmed reachable to `desktop-platform-integration`; whether a reachable capability is worth building to `desktop-overengineering-review`; the packaging, signing, and publish prerequisites a silent-failure trap names to `desktop-build-release`.
 
 ## When to Use
 
-- Scoping a feature that touches the OS shell, printing, media, credentials, notifications, or the GPU
-- Reviewing a plan or issue that assumes a capability exists because it exists in Electron, .NET, or Qt
+- Scoping a feature that touches the OS shell, printing, OCR, notifications, drag and drop, credentials, or accessibility
+- Reviewing a plan that assumes a capability exists because it exists in Electron, WPF, or Qt - or assumes one is missing because another stack lacked it
 - Triaging a feature that "does nothing" with no error in the log
+- Checking whether a dependency sits on the free or paid side of the Avalonia tier boundary
 
 ## Rules
 
-- **A capability with `Verdict: Gap` is not planned around, scheduled, or estimated.** It is either dropped from scope or replaced by its escape hatch, and the escape hatch is what gets estimated
-- Every Gap verdict states whether the block is **Rust-specific**, **universal**, or **crate-dead**. `UserChoice` file associations are impossible for every stack including C# and C++; saying "Rust can't" invites a rewrite that would also fail. A crate-dead Gap blocks only the named crate - the capability stays reachable via the replacement in its escape hatch
-- **Silent-failure traps are prerequisites, not polish.** Notifications, Keychain, and GPU selection each depend on packaging, signing, or process-start environment that no amount of application code substitutes for. Schedule them before the feature they gate, never after
-- A crate whose last release predates the current year by more than two years is Gap regardless of download count. `sled` at 0.34.7 from 2021 is dead; `rusqlite` replaces it
-- License is a verdict input, not a footnote. AGPL and GPL dependencies disqualify a closed-source app outright and appear in `Caveat:` before any technical merit
-- **Verdicts are stated with the evidence that produced them** - version number, issue number, or date. `Workable` with no cited version is not a verdict, it is a guess. Where this register names a crate without a version, run the crates.io check and cite what it returns rather than guessing one
+- **A capability with `Verdict: Gap` is not planned around, scheduled, or estimated.** It is dropped from scope or replaced by its escape hatch, and the escape hatch is what gets estimated
+- Every Gap verdict states whether the block is **stack-specific** or **universal**. `UserChoice` file associations are impossible for every stack including C++ and Electron; saying ".NET can't" invites a rewrite that would also fail
+- **Silent-failure traps are prerequisites, not polish.** Notifications, Keychain, and AOT-safe serialization each depend on packaging, signing, or build configuration that no application code substitutes for. Schedule them before the feature they gate, never after
+- **NativeAOT compatibility is a verdict input.** A library that works only under JIT reflection is `Workable` at best in an AOT-published app, and its trimming warnings are the evidence (`desktop-build-release` owns the publish setup)
+- The Avalonia framework is MIT and free for commercial use; **paid tiers sell tooling and premium components, not the framework**. A plan that budgets $0 for a control the Pro tier owns has a gap, not a discount
+- Verdicts are stated with the evidence that produced them - version, date, or documented OS behaviour. `Workable` with no citation is a guess, not a verdict. Where this register names an API without a version, run the NuGet or platform-docs check and cite what it returns
 
 ## Patterns
 
@@ -34,89 +35,76 @@ user-invocable: false
 
 | Verdict | Meaning | Design-time obligation |
 | --- | --- | --- |
-| `Strong` | Mature crate, current release, no setup beyond `cargo add` | Build it. No spike |
+| `Strong` | First-party or mature API, no setup beyond a PackageReference | Build it. No spike |
 | `Workable` | Reachable, with a named cost you accept up front | Record the caveat in the plan; schedule the prerequisite |
 | `Gap` | Not reachable in this stack, or not at all | Renegotiate scope, or estimate the escape hatch instead of the feature |
-| `Unknown` | Not in this register | Run the named check before the feature is estimated |
+
+### Present capabilities other stacks lack: do not design around a gap that is not there
+
+Plans written against other desktop stacks routinely assume these are missing. Here they work:
+
+| Capability | Verdict | API |
+| --- | --- | --- |
+| Screen readers | Strong | Avalonia automation peers: UIA on Windows, NSAccessibility on macOS (`desktop-accessibility` owns usage) |
+| Drag OUT to Explorer/Finder | Strong | `DragDrop.DoDragDrop` with a `DataObject` carrying the files |
+| OCR | Workable | `Windows.Media.Ocr` - WinRT, free, ships inside Windows. Windows-only; macOS needs a Vision-framework shim |
+| Printing | Workable | `System.Drawing.Printing` / `System.Printing`. Windows-only - see the cross-platform row below |
+| Rich text editing | Workable | Editable rich text is reachable, but full WYSIWYG remains limited - the polished Rich Text Editor is an Avalonia Pro-tier component |
 
 ### Hard gaps: do not design a feature on these
 
 | Capability | Why it is blocked | Escape hatch |
 | --- | --- | --- |
-| **Printing** | Unsolved in Rust; Tauri was still only *proposing* a printing plugin as of March 2026 | Generate a PDF with `typst` or `printpdf`, then hand it to the OS print dialog: `ShellExecute` with the `print` verb on Windows, `open` on macOS |
-| **File associations / "Open With" default** | Windows 10+ `UserChoice` is hash-protected and guarded by the `UCPD.sys` driver. **Impossible by design for every stack** - not a Rust limitation | Register the ProgID and *ask the user* to pick your app in the Windows Settings dialog. Deep-link them there; do not attempt the write |
-| **Shell extensions / Finder Sync / Quick Look** | Windows needs COM plus sparse MSIX packaging; macOS needs an Xcode-built `.appex`. Zero working Rust examples exist | Drop the in-shell surface. Deliver the same value from your own window, or ship a separate non-Rust helper bundle |
-| **Drag-OUT to Explorer/Finder** | Confirmed winit gap, open since 2020. Drag-**IN** works fine | Export to a user-chosen folder via `rfd`, or copy paths to the clipboard with `arboard` |
-| **Rich text / WYSIWYG editing** | Iced issue #156. Markdown *rendering* and plain-text editing both work | Author in markdown with Iced 0.14's native `markdown` widget plus `text_editor`; render the formatted result |
-| **OCR** | No credible pure-Rust option | Shell out to Tesseract; treat its presence as an optional runtime dependency and degrade cleanly when absent |
-| **`sled` as the embedded store** | 0.34.7 dates to 2021; the 1.0 alpha stalled in 2024 | `rusqlite` 0.40 |
+| **File associations / "Open With" default** | Windows 10+ `UserChoice` is hash-protected and guarded by the `UCPD.sys` driver. **Impossible by design for every stack - this is not a .NET limitation** | Register the ProgID and deep-link the user to the Windows default-apps Settings page to pick your app themselves; never attempt the write |
+| **Cross-platform printing** | The printing story is Windows-only: `System.Drawing.Common` is Windows-only in modern .NET, and Avalonia has no print API | Render to PDF with SkiaSharp (`SKDocument.CreatePdf`), then hand it to the OS: the `print` verb on Windows, `open` on macOS |
+| **Finder Sync / Quick Look extensions** | Require an Xcode-built `.appex` embedded in the bundle; no .NET path | Drop the in-shell surface; deliver the same value from your own window |
+| **Windows shell extensions** (context menu, overlay, preview) | Arguably worse in .NET than elsewhere: loading the CLR into Explorer's process was historically discouraged. NativeAOT plus `ComWrappers` improves it, but it remains an expert path a native DLL is better suited to | Deliver the action from your own window, or ship a small native (C++/Rust) DLL as a separate artefact |
 
 ### Silent-failure traps: no error, no crash, feature just does nothing
 
 These are the expensive ones. Each fails by doing nothing observable, so it survives development and dies on a user's machine.
 
-- **`notify-rust` no-ops without an install identity.** Windows requires a Start Menu shortcut carrying an AUMID; macOS requires a real `.app` bundle. Under `cargo run`, toasts ride a borrowed PowerShell AUMID and appear fine - the installed build without its own identity is what drops them silently, so dev success is a false positive. Verify from an installed build, never from the target directory
-- **macOS Keychain returns `-34018` for unsigned binaries**, and every rebuild changes the ad-hoc signing identity, so a credential stored yesterday is unreadable today. A stable signing identity is a prerequisite for any credential feature
-- **`aws-lc-rs` needs CMake and NASM on Windows**, and rustls **panics** when both the `ring` and `aws-lc-rs` providers are active. Audit with `cargo tree -i aws-lc-rs` before adding any TLS-touching crate
-- **wgpu finds no adapter under VMware** and defaults to the low-power iGPU on hybrid laptops. Iced's backend selection is **environment-variable-only**, so a launcher script or shim must set `ICED_BACKEND` / `WGPU_POWER_PREF` *before process start* - setting them in `main()` is too late. Test the `tiny-skia` CPU fallback deliberately
-- **Packaging and signing gate the three above.** Sequence them first
+- **Toast notifications no-op without an install identity.** Windows requires a Start Menu shortcut carrying an AUMID (or MSIX identity); macOS requires a real signed `.app` bundle. Under `dotnet run` they can appear fine - the installed build without its own identity is what drops them silently. Verify from an installed build, never from `bin/`
+- **macOS Keychain fails for unsigned binaries**, and every rebuild changes the ad-hoc signing identity, so a credential stored yesterday is unreadable today. A stable signing identity is a prerequisite for any credential feature
+- **`FileSystemWatcher` silently drops events when its internal buffer overflows.** Wire the `Error` event, raise `InternalBufferSize`, and rescan on overflow - treat the watcher as a hint, not a ledger
+- **NativeAOT breaks reflection-based code**: reflection JSON serializers, convention-based DI registration, and `{Binding}` runtime XAML binding. Use source generators, explicit registration, and compiled bindings; trimming warnings are the early signal, and a suppressed warning is a runtime failure deferred to a customer machine
 
-```rust
-// Bad - "fixing" GPU selection from inside the process; the adapter is already chosen
-fn main() {
-    std::env::set_var("WGPU_POWER_PREF", "high");
-    iced::run(...)
-}
+```csharp
+// Bad - works under JIT, fails or returns nothing under NativeAOT; the trim warning was ignored
+var settings = JsonSerializer.Deserialize<Settings>(json);
 
-// Good - a launcher sets it before the process that reads it starts
-// run.cmd:  set WGPU_POWER_PREF=high && myapp.exe
+// Good - source-generated context; AOT-safe and trim-safe
+var settings = JsonSerializer.Deserialize(json, SettingsContext.Default.Settings);
 ```
+
+### The Avalonia tier boundary
+
+The MIT framework is complete for a closed-source commercial app at $0: ~70 built-in controls, no runtime licence checks. What is paid is tooling and premium components:
+
+| Tier | What it holds |
+| --- | --- |
+| Free (MIT framework) | The framework, all ~70 built-in controls, commercial use included |
+| Plus | The new DevTools and IDE extensions |
+| Pro | Premium control suite, including charts and the Rich Text Editor |
+| Community | **Strictly non-commercial since its 2026 narrowing** - not available to this distribution model |
+
+Avalonia 12 removed the free `Avalonia.Diagnostics` DevTools from the default template; the legacy package still exists, is free, and is re-added manually. State the risk plainly in any plan leaning on Avalonia tooling: free developer experience has moved behind paywalls twice in 18 months.
 
 ### Strong: build freely
 
-| Need | Crate |
+| Need | API / package |
 | --- | --- |
-| File watching | `notify` 8.2 |
-| Clipboard | `arboard` |
-| File dialogs | `rfd` 0.17 |
-| Embedded store | `rusqlite` 0.40 |
-| Logging / diagnostics | `tracing` |
-| Excel and CSV | `calamine` (read) + `rust_xlsxwriter` (write) |
-| Archives | `zip` 8.6, `sevenz-rust2`, `tar` + `flate2` |
-| Localization | `i18n-embed` + `fluent-templates` + `icu4x` 2.0 |
-| User scripting | `rhai` |
-| HTTP | `ureq` 3.3 - avoids the tokio pull `reqwest` brings |
-| Windows OS integration | `windows-registry`, `windows-service` |
-| Markdown, code editing, highlighting | Iced 0.14 native `markdown`, `text_editor`, `highlighter` |
+| File and folder dialogs | Avalonia `IStorageProvider` |
+| Tray icon | Avalonia `TrayIcon` |
+| Clipboard | Avalonia `IClipboard` |
+| File watching | `FileSystemWatcher` (with the buffer-overflow caveat above) |
+| Embedded store | `Microsoft.Data.Sqlite` |
+| Logging | `Microsoft.Extensions.Logging` / Serilog |
+| Archives | `System.IO.Compression` |
+| JSON | `System.Text.Json`, source-generated |
+| HTTP | `HttpClient` |
 
 Nothing here needs a feasibility spike. Pick one and build.
-
-### Verifying a trap instead of assuming it
-
-A silent-failure trap is confirmed or cleared by a command, not by reading code:
-
-```
-cargo tree -d                 # duplicate crates - the wgpu/iced version-mismatch class
-cargo tree -i aws-lc-rs       # second TLS provider - rustls panics with two active
-cargo tree -i tokio           # an unintended runtime pulled in by a transitive dep
-```
-
-Run these before the feature is written. Each one that returns unexpected output converts an assumed-`Strong` capability into a `Workable` with a named caveat.
-
-### Workable with caveats
-
-| Capability | Approach | Caveat |
-| --- | --- | --- |
-| Auto-update | `velopack` or `self_update`, always `self-replace` for the exe swap | No de-facto standard; the choice is yours to own and maintain |
-| Installers | `cargo-packager` | `cargo-bundle` is self-declared **alpha** |
-| Tray icon | `tray-icon` + `muda` | macOS requires main-thread construction |
-| Toast notifications | `notify-rust` | Silent-failure trap: needs an install identity (AUMID-bearing shortcut on Windows, real `.app` on macOS) |
-| Global hotkeys | `global-hotkey` | You write the macOS accessibility-permission flow yourself |
-| Credential storage | `keyring` 4.1.6 | Deprecated itself toward `keyring-core`; 4.1.3 was yanked; needs a **stable** signing identity on macOS |
-| Single instance | Available, boolean only | Argv forwarding to the running instance is yours to implement |
-| PDF | `hayro` 0.7 (render), `lopdf` (edit), `typst` + `printpdf` (generate) | **`mupdf` is AGPL-3.0 - disqualifying for closed source** |
-| Crash reporting | `sentry` 0.48 covers panics | Native minidumps need a second supervising process |
-| Charting | `plotters-iced2` fork | Fragile; a fork tracking a moving Iced version |
 
 ## Output Format
 
@@ -124,12 +112,11 @@ One block per capability assessed:
 
 ```
 Capability: {name}
-Verdict: {Strong | Workable | Gap | Unknown}
-Blocked for: {Rust-specific | universal | crate-dead} - required when Verdict is Gap; omit otherwise
-Crate/approach: {crate + version, or the mechanism; `none` when Verdict is Gap}
-Evidence: {version + date, issue number, or dated source behind the verdict}
-Caveat: {the trap, license, or prerequisite; `none` when Strong}
-Escape hatch: {required when Verdict is Gap; omit for Strong and Workable}
+Verdict: {Strong | Workable | Gap}
+API/approach: {API or package + version; `none` when Verdict is Gap}
+Caveat: {the trap, tier, licence, or prerequisite; `none` when Strong}
+Escape hatch: {required when Verdict is Gap; omit otherwise}
+Blocked for: {stack-specific | universal} - required when Verdict is Gap; omit otherwise. A paid-tier or licence block is stack-specific
 ```
 
 `Escape hatch:` is mandatory on every `Gap` block. A Gap without one is an unanswered requirement, not a finding.
@@ -137,24 +124,27 @@ Escape hatch: {required when Verdict is Gap; omit for Strong and Workable}
 When the assessed capability sits in the silent-failure set, add one line after `Caveat:`:
 
 ```
-Prerequisite: {packaging, signing, or launcher-environment step that must ship first}
+Prerequisite: {packaging, signing, or build-configuration step that must ship first}
 ```
 
-When a capability is outside this register, emit `Capability: {name}` / `Verdict: Unknown` / `Evidence needed: {the crates.io check, issue search, or spike that would resolve it}` rather than guessing a verdict.
+A capability outside this register gets no verdict from memory: run the NuGet or platform-docs check first and cite the result in `Caveat:`; until the check has run, name the check as the next step instead of emitting a block. A capability the register names without a specific API takes its documented verdict now, with the package or docs check named inside the block as the next step.
 
 Close with one line so the caller knows the sweep ran:
 
 ```
-Blocking gaps: {count} | Silent-failure prerequisites: {count} | Unknown: {count}
+Blocking gaps: {count} | Silent-failure prerequisites: {count}
 ```
+
+A defect owned by a sibling named in the ownership blockquote is written after the blocks as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
 ## Avoid
 
 - Estimating a feature whose verdict is `Gap` instead of estimating its escape hatch
-- Describing a universal platform block as a Rust shortcoming
-- Testing notifications, Keychain, or GPU selection from `cargo run` instead of an installed, signed build
-- Setting `ICED_BACKEND` or `WGPU_POWER_PREF` inside `main()`
-- Adding a second TLS provider without running `cargo tree -i aws-lc-rs`
-- Introducing `sled`, `mupdf`, or `cargo-bundle` into a new project
-- Reporting a verdict with no version, issue number, or date behind it
+- Describing a universal platform block as a .NET shortcoming - or attempting the `UserChoice` write at all
+- Designing around a gap that is not there: assuming screen readers, drag-out, or Windows OCR are missing
+- Testing notifications, Keychain, or credential storage from `dotnet run` instead of an installed, signed build
+- Adopting a reflection-dependent library in an AOT-published app without checking its trimming warnings
+- Budgeting the Avalonia Community tier for a commercial project
+- Loading managed code into Explorer's process for a shell extension
+- Reporting a verdict with no version, date, or documented behaviour behind it
 - Scheduling packaging and signing after the features that depend on them

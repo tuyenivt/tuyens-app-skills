@@ -32,7 +32,7 @@ claude plugin install flutter@tuyens-app-skills --scope project
 claude plugin install unity@tuyens-app-skills --scope project
 ```
 
-**Rust desktop utility project:**
+**C# desktop utility project:**
 
 ```bash
 claude plugin install desktop@tuyens-app-skills --scope project
@@ -66,7 +66,7 @@ Unity 2D games (plugin: unity)
   security review                      -> /task-unity-review-security
   test strategy / scaffolds            -> /task-unity-test
 
-Rust desktop utilities (plugin: desktop)
+C# desktop utilities (plugin: desktop)
   implement a new feature              -> /task-desktop-implement
   staff-level code review              -> /task-desktop-review
   performance review                   -> /task-desktop-review-perf
@@ -89,7 +89,7 @@ Rust desktop utilities (plugin: desktop)
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [flutter](plugins/flutter) | Flutter / Dart 3.x client apps - Riverpod, go_router, Dio, Drift. Mobile primary, desktop secondary, web tertiary                                                 |
 | [unity](plugins/unity)     | Unity 6.3 LTS / C# 2D games - casual and puzzle titles. Engine-free rules core, URP 2D, UI Toolkit, Addressables. Mobile primary, desktop secondary, WebGL tertiary |
-| [desktop](plugins/desktop) | Rust 2024 / Iced 0.14 native desktop utilities - bulk file operations, dedup, local-first tools. GUI-free core, rayon, rusqlite, wgpu. Windows primary, macOS secondary |
+| [desktop](plugins/desktop) | .NET 10 / Avalonia 12 desktop utilities - bulk file operations, dedup, local-first tools. UI-free core, CommunityToolkit.Mvvm, SQLite, SkiaSharp. Windows primary, macOS secondary |
 
 ## Notes
 

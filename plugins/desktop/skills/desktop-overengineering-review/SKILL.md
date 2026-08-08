@@ -1,197 +1,157 @@
 ---
 name: desktop-overengineering-review
-description: Rust/Iced necessity review - trait with one implementer, Arc<Mutex<>> on single-owner data, premature async, a second runtime, dead feature flags.
+description: C#/Avalonia necessity review - one-implementer interfaces, MediatR in-process, premature DI and async, plus the absent-structure floor.
 metadata:
   category: desktop
-  tags: [rust, iced, code-review, overengineering, necessity, traits, async, generics]
+  tags: [csharp, dotnet, avalonia, code-review, overengineering, necessity, interfaces, dependency-injection, async, mvvm]
 user-invocable: false
 ---
 
 # Desktop Overengineering Review
 
-> Confirm the crate layout and the async runtime already in the workspace from `Cargo.toml` and `Cargo.lock` first. An established convention is context, not a finding - review what the diff adds against it.
+> Confirm the solution layout, the MVVM toolkit, and the DI story already in use from the `.sln` and `.csproj` files first. An established convention is context, not a finding - review what the diff adds against it.
 >
-> This skill owns **whether a layer earns its keep**. Where code lives and which way dependencies point belongs to `desktop-core-architecture`; Iced's Model-Message-Update-View shape to `iced-architecture-patterns`; ownership, borrowing, and idiom to `rust-language-patterns`; error type design to `rust-error-handling`; measured cost to `desktop-performance`; GPU transfer-cost analysis to `desktop-gpu-compute`.
+> This skill owns **whether a layer earns its keep**. Where code lives and which way references point belongs to `desktop-core-architecture`; Avalonia's MVVM shape to `avalonia-mvvm-patterns`; control composition to `avalonia-control-patterns`; language idiom to `csharp-language-patterns`; error type design to `csharp-error-handling`; `async` mechanics to `csharp-async-patterns`; measured cost to `desktop-performance`.
 
 ## When to Use
 
-- Reviewing a Rust desktop diff that adds traits, generics, channels, `async`, feature flags, custom widgets, or a framework
-- Catching code that compiles, passes `clippy`, and passes tests but does not need to exist
+- Reviewing a C# desktop diff that adds interfaces, base classes, DI registrations, `async` signatures, or a framework (MediatR, AutoMapper, ReactiveUI)
+- Catching code that compiles, passes analyzers, and passes tests but does not need to exist
 
 ## Rules
 
-- Every finding names what makes the abstraction unnecessary: one implementer and no test double, one instantiation, one thread, one call site, no measurement, the branch is unreachable. When several stack, comma-separate them in `Unnecessary because:`
+- Every finding names what makes the abstraction unnecessary: one implementer and no test double, one subclass, one call site, one handler, no measurement, the branch is unreachable. When several stack, comma-separate them in `Unnecessary because:`
 - Intent:
-  - **`[Recommend]`** (default). Name the constraint, recommend the edit. Escalate to **`[Must]`** when measurable or structural cost is present; cite it in `Cost:`. In a design-only review with nothing to measure, the structural triggers below still escalate. Triggers: an abstraction that forces a test to spin an executor where a plain function call sufficed; a lock or channel whose contention or latency is measurable; a second async runtime in the process; a branch presented as handling a case it can never reach
+  - **`[Recommend]`** (default). Name the constraint, recommend the edit. Escalate to **`[Must]`** when measurable or structural cost is present; cite it in `Cost:`. In a design-only review with nothing to measure, the structural triggers still escalate. Triggers: an abstraction that forces a test to build a container or handler pipeline where a plain call sufficed; a runtime reflection registry in a NativeAOT-published app; a dispatch layer whose latency is measurable; an async signature already propagated through callers for a method that touches no I/O; a branch presented as handling a case it can never reach
   - **`[Recommend]`** when justification is plausible but not visible in the diff - state the assumption and ask the author to confirm
 - An abstraction with **visible** justification - a second implementer, a test double, a benchmark in the PR - is not a finding
-- **Scale is the discriminator, and scale is not domain.** Price an abstraction against the variation it absorbs: maintainer count, shipped platforms, supported file formats, locales, and runtime-selected backends. A solo-maintained two-platform file utility absorbs almost no variation and earns almost no layers; cite the project's actual numbers, not a general principle
-- **This skill has a floor as well as a ceiling.** Where structure is absent rather than excessive - a single `main.rs` holding traversal, hashing, and view code; no core crate; `iced` reachable from domain logic; no seam to test a destructive operation - say so plainly and route it to `desktop-core-architecture`. Never read "solo project" or "small utility" as licence for no structure: a codebase where one rename rule costs edits in nine places has already paid more than the abstraction would have cost
+- **Scale is the discriminator, and scale is not domain.** Price an abstraction against the variation it absorbs: maintainer count, shipped platforms, supported formats, locales. A solo-maintained two-platform file utility absorbs almost no variation and earns almost no layers; cite the project's actual numbers, not a general principle
+- **This skill has a floor as well as a ceiling.** Where structure is absent rather than excessive - a God ViewModel holding traversal, hashing, and rename rules; static mutable state as the only channel between features; no seam to test a destructive operation - say so plainly and route it to `desktop-core-architecture`. Never read "solo project" or "small utility" as licence for no structure: a codebase where one rename rule costs edits in nine places has already paid more than the abstraction would have cost
 - Never propose deleting a layer the diff's own tests bind to
-- **Performance abstractions need a measurement, not an argument.** A cache, a channel, a thread pool, or a GPU path introduced without a benchmark is speculative regardless of how reasonable it sounds
+- **Performance abstractions need a measurement, not an argument.** A cache, an index, object pooling, or `Parallel.ForEach` introduced without a benchmark is speculative regardless of how reasonable it sounds
+- **Never propose migrating a project already on ReactiveUI.** The finding exists only when the diff *introduces* ReactiveUI where CommunityToolkit.Mvvm suffices
 
 ## Patterns
 
 ### Category 1: Type-System Ceremony
 
-#### Trait with one implementer and no test double
+#### Interface with one implementer and no test double
 
-```rust
-// Bad - one impl, never substituted, never faked
-pub trait FileScanner { fn scan(&self, root: &Path) -> Vec<PathBuf>; }
-pub struct WalkdirScanner;
+```csharp
+// Bad - one implementation, never substituted, never faked
+public interface IFileScanner { IReadOnlyList<string> Scan(string root); }
+public sealed class FileScanner : IFileScanner { /* ... */ }
 
-// Good - the function
-pub fn scan(root: &Path) -> Vec<PathBuf> { ... }
+// Good - the class
+public sealed class FileScanner { public IReadOnlyList<string> Scan(string root) { /* ... */ } }
 ```
 
-Justified when a fake or a second implementation exists, or arrives in the same PR. A `Clock` or `Rng` trait substituted in tests is a genuine seam (`desktop-core-architecture`) - check for the substitution before flagging.
+Justified when a fake or a second implementation exists, or arrives in the same PR. A `TimeProvider` or filesystem seam substituted in tests is genuine (`desktop-core-architecture`) - check for the substitution before flagging.
 
-#### Generic parameter with one instantiation
+#### Abstract base class with one subclass
 
-```rust
-// Bad - Store<T> only ever Store<Settings>; monomorphized once, generic forever
-pub struct Store<T: Serialize + DeserializeOwned> { ... }
+`abstract` members nobody else overrides, `protected virtual` hooks nobody else calls. Collapse into the subclass. Justified at a second subclass, or when a framework demands the base.
+
+#### Generic repository over SQLite for a local cache
+
+```csharp
+// Bad - IRepository<T>, unit-of-work, and specifications over a local cache with four queries
+public interface IRepository<T> { Task<T?> GetAsync(int id); Task AddAsync(T item); /* ... */ }
+
+// Good - a class with the queries the app makes
+public sealed class ScanCache { public DuplicateGroup? FindByHash(string hash) { /* ... */ } }
 ```
 
-Justified at 2+ instantiations, or when the type is a published crate's public API.
+The repository pattern absorbs database-engine variation; a local cache has exactly one engine, chosen forever (`desktop-data-persistence` owns the store itself).
 
-#### Newtype per primitive with no invariant
+#### AutoMapper for two mappings
 
-```rust
-// Bad - a wrapper that enforces nothing and is unwrapped at every call site
-pub struct FileCount(usize);
+A hand-written mapping method is visible, debuggable, and AOT-safe. Justified at a mapping count where drift is a real maintenance cost - cite the count.
 
-// Good - a newtype that upholds something
-pub struct NonEmptyPattern(String);   // constructor rejects ""
+### Category 2: Framework Weight
+
+#### MediatR or an event aggregator in a single-process desktop app
+
+```csharp
+// Bad - a request dispatched through a registry to its one handler in the same process
+await _mediator.Send(new ApplyRenameCommand(plan));
+
+// Good - a method call
+await _renameService.ApplyAsync(plan);
 ```
 
-Justified when the constructor validates, when two same-typed parameters would otherwise be swappable, or when it carries a unit.
+`Cost:` every trace and debug step now routes through a dispatch layer, and the handler registry is reflection-based - hostile to a NativeAOT publish. Justified by genuine fan-out: multiple independent subscribers that must not know each other.
 
-#### Builder for three fields
+#### A DI container for three services a constructor could wire
 
-```rust
-// Bad - four methods and a `build()` returning Result for a struct with three fields
-RenameOptions::builder().pattern(p).recursive(true).dry_run(false).build()?
+```csharp
+// Bad - a generic host and registrations for a graph the eye can hold
+services.AddSingleton<IScanner, Scanner>();
+services.AddSingleton<IRenamePlanner, RenamePlanner>();
+services.AddSingleton<MainViewModel>();
 
-// Good
-RenameOptions { pattern: p, recursive: true, dry_run: false }
+// Good - a composition root; construction order is the dependency graph
+var scanner = new Scanner();
+var vm = new MainViewModel(scanner, new RenamePlanner(scanner));
 ```
 
-Justified above roughly five fields, with genuine optionality, or when the type is public API needing backwards-compatible extension. `..Default::default()` covers most of the remaining cases.
+Justified when lifetimes genuinely vary or the graph outgrows a screenful. Convention-based assembly scanning is a second finding on top - it is also AOT-hostile.
 
-### Category 2: Premature Concurrency
+#### ReactiveUI introduced where CommunityToolkit.Mvvm suffices
 
-#### `Arc<Mutex<T>>` around data one thread owns
+Observable pipelines, schedulers, and a second binding idiom to absorb what `[ObservableProperty]` and `[RelayCommand]` already cover. Flag only on introduction; an existing ReactiveUI codebase is convention, and migration is never the recommendation.
 
-```rust
-// Bad - the lock is never contended; one thread touches this
-let state = Arc::new(Mutex::new(ScanState::default()));
+#### Premature `IOptions<T>` for constants
 
-// Good - plain ownership; the borrow checker already proved single access
-let mut state = ScanState::default();
+`IOptions<ThumbnailSettings>` wrapping four values no deployment ever varies. A `static class` of constants, or a plain record loaded once, says what it is.
+
+#### A service layer that only forwards
+
+A `FooService` whose every method is one line calling `FooRepository`. Delete the layer; callers take the dependency the service was hiding.
+
+### Category 3: Premature Async
+
+#### `async` on a CPU-bound synchronous path
+
+```csharp
+// Bad - async signature over pure computation; every caller goes async for nothing
+public async Task<int> CompareAsync(PerceptualHash a, PerceptualHash b) => Distance(a, b);
+
+// Good - sync core; the ViewModel offloads at the boundary
+public int Compare(PerceptualHash a, PerceptualHash b) => Distance(a, b);
+// caller: await Task.Run(() => _comparer.Compare(a, b));
 ```
 
-`Cost:` every read becomes a fallible lock acquisition and a poisoning path that must be handled or unwrapped. Justified when a second thread or an Iced task genuinely holds a handle.
+`Cost:` the async signature propagates through every caller and test for a method that touches no I/O. Offloading belongs at the UI boundary (`csharp-async-patterns`), not in the core signature.
 
-#### `async` in a CPU-bound path
+#### A `Task`-returning method that never awaits
 
-```rust
-// Bad - async signature over pure computation; every caller must be async or block
-pub async fn hash_file(path: &Path) -> Result<Hash> { ... }
+`async` with no `await` (the compiler already said so: CS1998), or `Task.FromResult` returned to satisfy a self-imposed interface. Make it synchronous; wrap at the call site that genuinely needs a `Task`.
 
-// Good - sync core; the UI moves it off-thread at the boundary
-pub fn hash_file(path: &Path) -> Result<Hash> { ... }
-```
+### Category 4: Speculative Performance
 
-`Cost:` the async colour propagates through every caller, and unit tests now need an executor for a function that does no I/O. Hashing, comparison, and image decode are CPU-bound. Offloading belongs at the Iced boundary (`iced-async-patterns`), not in the core signature.
+A cache, a precomputed index, object pooling, or a `Parallel.ForEach` added "for performance" with no measurement cited. `desktop-performance` owns the measurement discipline; the finding here is the abstraction added on a guess. If a benchmark is cited, this is not a finding regardless of the outcome.
 
-#### A channel where a return value suffices
+### Category 5: Absent Structure
 
-```rust
-// Bad - a channel to move one value between two adjacent, known points
-let (tx, rx) = mpsc::channel();
-compute(tx);
-let result = rx.recv()?;
-
-// Good
-let result = compute();
-```
-
-Justified for streaming progress from a long operation, or when producer and consumer genuinely do not know each other. Progress reporting is a real case; a single result is not.
-
-#### A second async runtime alongside Iced's executor
-
-```rust
-// Bad - tokio spun up inside an Iced app that already has an executor
-let rt = tokio::runtime::Runtime::new()?;
-```
-
-`Cost:` two thread pools, two schedulers, and a hard-to-diagnose class of bug where a future is polled by the wrong one. Justified only when a dependency mandates a specific runtime and no alternative exists - `ureq` replaces `reqwest` precisely to avoid this (`desktop-ecosystem-boundaries`).
-
-### Category 3: Speculative Performance
-
-#### A cache or index with no benchmark
-
-A memoization layer, a precomputed index, or a thread pool added "for performance" with no measurement cited. `desktop-performance` owns the measurement discipline. The finding here is the abstraction added on a guess; if a benchmark is cited, this is not a finding regardless of the outcome.
-
-#### `clone()` scattered to silence the borrow checker
-
-```rust
-// Bad - a clone per call site because the ownership story was never decided
-let plan = self.plan.clone();
-```
-
-Clones that express ownership transfer are fine. Clones that appear wherever the compiler complained are an unresolved design; the finding names the ownership decision that was skipped and routes mechanics to `rust-language-patterns`. State the data size when it is large - that is the `Cost:`.
-
-#### A GPU path with no CPU baseline
-
-A `wgpu` compute port with no timing against the CPU implementation it replaces is speculative. `desktop-gpu-compute` owns the transfer-cost analysis.
-
-### Category 4: Structural Excess
-
-#### `Box<dyn Error>` across the core's public API
-
-A missing type, not a surplus one, and it makes every layer above it unreviewable because callers can only print. Always `Deferred: -> rust-error-handling`.
-
-#### Custom widget where built-in composition works
-
-```rust
-// Bad - a hand-rolled Widget impl with layout, draw, and event plumbing for a labelled row
-// Good - row![text(label), horizontal_space(), toggler(value)]
-```
-
-Justified for genuinely novel drawing or interaction. `iced-widget-patterns` owns the composition vocabulary; check it before accepting that a custom widget was needed.
-
-#### ECS or an actor framework for a file utility
-
-`Cost:` a second programming model, a separate debugging story, and domain logic that is no longer plain Rust. A bulk renamer and an image deduplicator are batch pipelines over a list. Justified only with a profile showing the entity or message volume that motivates it.
-
-#### Dead feature flag
-
-```rust
-// Bad - a cfg branch no test or build profile ever compiles
-#[cfg(feature = "new_scanner")]
-```
-
-Justified when a build profile, a platform split, or an optional dependency backs it, and that configuration is actually built. Otherwise delete the dead branch - an uncompiled branch rots.
+The floor rule's category. A single ViewModel holding traversal, hashing, and rename rules; static mutable state as the only channel between features; a destructive operation with no seam a test can reach. The finding states what the absence already costs - the edit-site count, the untestable path - and routes the extraction to `desktop-core-architecture`.
 
 ## Output Format
 
 One block per finding; the consuming workflow merges them:
 
 ```
-### [Must | Recommend] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
+### [Must | Recommend] {file:line | file - symbol, when the line is unknown | symbol, when source was supplied without paths | quoted design excerpt, when reviewing a design description | symptom, when no source was supplied}
 
-- Category: {Type-System Ceremony | Premature Concurrency | Speculative Performance | Structural Excess | Absent Structure}
+- Category: {Type-System Ceremony | Framework Weight | Premature Async | Speculative Performance | Absent Structure}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Unnecessary because: {what makes it dead, unread, or single-valued; comma-separate when stacked} -- OR, for Absent Structure -- Missing because: {what the absence costs}
 - Cost: {required for [Must]; omit otherwise}
-- Recommendation: {concrete Rust or manifest edit; for Absent Structure, the extraction and its owning skill}
+- Recommendation: {concrete C# or csproj edit; for Absent Structure, the extraction and its owning skill}
 - Justified when: {one-line note if a legitimate reason might apply; otherwise omit}
 ```
 
-`Absent Structure` is the floor rule's category. Its `Cost:` is the edit-site count or the regression count already being paid, and that count is what escalates the block to `[Must]`.
+`Absent Structure` blocks take `Cost:` as the edit-site count or regression count already being paid, and that count is what escalates the block to `[Must]`.
 
 Output order: finding blocks, then `Justified as-is:` lines, then the per-category zero-finding lines, then `Deferred:` lines. An abstraction examined and found justified is written one per line, so the reader can tell a defended layer from an unexamined one:
 
@@ -201,19 +161,18 @@ Justified as-is: {abstraction} - {the visible justification: implementer count, 
 
 This is the required form whenever the request questions an existing layer, since `No <category> findings.` alone reads as "nothing was checked" rather than "this was checked and it holds".
 
-For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran; append ` - not assessable from this input` when the input could not exercise that category (structure is unobservable from a design sketch). Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the design is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
+For each category with zero findings, emit exactly: `No <category> findings.` (using the category name from the enum) so the workflow knows the check ran; append ` - not assessable from this input` when the input could not exercise that category. Omit this line for categories that have at least one finding. Emit `Necessity check not run: no source supplied.` instead of the per-category lines only when nothing at all was supplied - a prose description of the design is checkable input, and yields findings, `Justified as-is:` lines, or `Deferred:` lines like any other source.
 
 A defect owned by a sibling named in the ownership blockquote is not emitted as a finding. Write those at the end, one per line, as `Deferred: {defect} -> {owning skill}`, so the workflow routes rather than drops them. Omit entirely when there are none.
 
 ## Avoid
 
-- Flagging a trait that a test double or a second implementation substitutes
-- Flagging `Arc<Mutex<>>` where an Iced task or a worker thread holds a second handle
-- Flagging `async` on a function that awaits real I/O - synchronous reads inside an `async fn` do not count
-- Flagging a channel that streams progress from a long-running operation
-- Flagging a cache, thread pool, or GPU path whose PR cites a benchmark
-- Flagging the runtime, crate layout, or error convention the workspace already standardized on, or proposing migration off it
-- Treating file count, module count, or line count as a complexity metric
+- Flagging an interface that a test double or a second implementation substitutes
+- Flagging `async` on a method that awaits real I/O - `Stream.ReadAsync` in the body is not premature async
+- Flagging `IProgress<T>` or a channel that streams progress from a long-running operation
+- Flagging a cache, pooling, or parallel path whose PR cites a benchmark
+- Proposing migration off ReactiveUI, the DI container, or the error convention the solution already standardized on
+- Treating file count, project count, or line count as a complexity metric
 - Removing a layer the diff's own tests bind to
-- Raising findings against generated code, vendored sources, or `target/`
+- Raising findings against generated code - `obj/`, `bin/`, `*.g.cs`, XAML-generated partials
 - Reading "solo maintainer" as licence to skip the floor check

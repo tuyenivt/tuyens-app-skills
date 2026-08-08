@@ -1,54 +1,55 @@
-# Tuyen's Agent Skills - Rust Desktop
+# Tuyen's Agent Skills - C# Desktop
 
-Claude Code plugin for native-performance desktop utility development in Rust.
+Claude Code plugin for native desktop utility development in C# and Avalonia.
 
 This is the marketplace's third client plugin, alongside `flutter` and `unity`. Like both, it is authored against the client domain rather than adapted from a backend plugin - transactions, connection pools, and server middleware do not map to a tool running on the user's own machine. Unlike both, its subject is **local-first utilities**: the app has no backend, and its risk lives in the filesystem operations it performs rather than in anything it sends over a network.
 
 ## Target Applications
 
-Native-performance local utilities: bulk file rename, image deduplication with thumbnail preview, batch conversion, tree comparison, and comparable tools whose cost is filesystem traversal, hashing, and image decode rather than network I/O.
+Local desktop utilities: bulk file rename, image deduplication with thumbnail preview, batch conversion, tree comparison, and comparable tools whose cost is filesystem traversal, hashing, and image decode rather than network I/O.
 
-The workload is CPU-bound and I/O-bound, and it ends in **destructive filesystem operations**. That single fact shapes the plugin: dry-run preview, undo, and collision handling are core concerns rather than nice extras.
+The workload is I/O-bound first and CPU-bound second, and it ends in **destructive filesystem operations**. That single fact shapes the plugin: dry-run preview, undo, and collision handling are core concerns rather than nice extras.
 
 ## The Central Rule
 
-**File-utility logic is plain Rust with no `iced` dependency**, enforced by the core crate's `Cargo.toml` rather than by discipline.
+**File-utility logic lives in a core class library with no Avalonia `PackageReference`**, enforced by the project file rather than by discipline.
 
-Traversal, hashing, dedup grouping, rename planning, collision resolution, and undo all run without a window. This makes them unit-testable in milliseconds instead of requiring a GUI harness, and it is what makes the destructive paths - the ones that lose user data when wrong - cheap to cover exhaustively. `desktop-core-architecture` owns the rule; most other skills reference it.
+Traversal, hashing, dedup grouping, rename planning, collision resolution, and undo all run without a window. This makes them unit-testable in milliseconds instead of requiring a UI harness, and it is what makes the destructive paths - the ones that lose user data when wrong - cheap to cover exhaustively. `desktop-core-architecture` owns the rule; most other skills reference it.
 
 ```
-crates/
-  core/    walk, hash, dedup, rename planning, collision resolution, undo
-           no iced, no wgpu, no winit - unit-testable without a window
-  app/     Iced UI, wiring core operations to messages
+src/
+  MyApp.Core/    walk, hash, dedup, rename planning, collision resolution, undo
+                 no Avalonia reference - unit-testable without a window
+  MyApp/         Avalonia UI, ViewModels, views
 ```
 
-`cargo tree -p <core> | grep iced` returning nothing is a CI-checkable invariant.
+A CI check that fails when Avalonia appears in the core's dependency tree makes the rule mechanical.
 
 ## Stack
 
-- **Rust** 2024 edition
-- **Iced 0.14.x** (MIT) - retained-mode, GPU-rendered, no attribution obligation
-- `walkdir` / `jwalk` traversal, `rayon` parallel scan, `blake3` / `xxhash` hashing
-- `image` 0.25 for decode; `wgpu` 29 compute via Iced's re-export for heavy pixel work
-- `rusqlite` 0.40 (`bundled`) for persistence - **`sled` is unmaintained** and not used
-- `rfd` dialogs, `notify` file watching, `arboard` clipboard, `tracing` logging
-- `cargo-packager` for installers; `rcodesign` for macOS signing and notarization
-- Built-in test harness, `tempfile` fixtures, `proptest` for invariants
+- **.NET 10** (LTS, supported to November 2028)
+- **Avalonia 12.1.x** (MIT) - own compositor on Skia, real UI Automation support
+- **CommunityToolkit.Mvvm** for MVVM; ReactiveUI respected where a project already uses it
+- **Microsoft.Data.Sqlite** for persistence and scan caches
+- **SkiaSharp** for image decode (ships with Avalonia; native codecs)
+- **System.IO.Hashing** (XxHash3) - SIMD-accelerated content hashing
+- `Parallel.ForEach`, `System.Threading.Channels`, `IProgress<T>`, `CancellationToken`
+- **NativeAOT-compatible by design**: compiled bindings and source generators, no reflection-dependent code
+- xUnit with temp-directory fixtures; Velopack or WiX for packaging
 
 ### Platform tiers
 
 | Tier | Platforms | Support level |
 | ---- | --------- | ------------- |
 | **Primary** | Windows | Full depth. Assumed unless stated otherwise. |
-| **Secondary** | macOS | Caveats: Unicode NFD filename normalization, signing and notarization, per-platform paths. |
+| **Secondary** | macOS | Caveats: Unicode normalization, signing and notarization, per-platform paths. |
 | Not targeted | Linux | Out of scope by design. |
 
 ### Two facts worth knowing before you start
 
-**Iced has no accessibility support.** Issue [#552](https://github.com/iced-rs/iced/issues/552) has been open since October 2020, and Iced does not consume AccessKit (egui and Slint do). This is a stack-level exclusion that cannot be fixed downstream. The plugin covers what remains achievable - keyboard navigation, focus order, contrast, text scaling - and never implies screen-reader support exists. If a project must serve government, education, healthcare, or a11y-procurement enterprise markets, this is the wrong stack.
+**Some desktop capabilities are hard blocks, and not all of them are .NET's fault.** File associations are impossible by design on Windows 10+ for every stack (`UserChoice` is hash-protected and guarded by `UCPD.sys`); cross-platform printing has no good story; Finder Sync and Quick Look need Xcode. `desktop-ecosystem-boundaries` is the register of what is a Gap, what silently no-ops, and which escape hatch to use instead. `/task-desktop-implement` loads it before any design work so an impossible requirement is caught at design time.
 
-**Some desktop capabilities are hard blocks.** Printing is unsolved in Rust; file associations are impossible by design on Windows 10+ for every stack; shell extensions need COM or Xcode. `desktop-ecosystem-boundaries` is the register of what is a Gap, what silently no-ops, and which escape hatch to use instead. `/task-desktop-implement` loads it before any design work so an impossible requirement is caught at design time.
+**Avalonia's free tier is complete for a commercial closed-source app**, at $0, with the full framework and its built-in controls. What is paid is tooling and premium components - the current DevTools and IDE extensions, and a charts/rich-text control suite. The Community tier is restricted to non-commercial use, so a commercial project uses Free or a paid tier. Worth knowing: free developer experience has moved behind paywalls twice in 18 months.
 
 ## Decisions
 
@@ -56,24 +57,24 @@ Why this stack, in short. These are settled - the skills encode them as constrai
 
 | Decision | Why |
 | --- | --- |
-| **Rust** | Fearless concurrency: the workload is parallel walk, hash, and decode, where a data race is a compile error rather than silent corruption. No GC pause on a large scan. |
-| **Iced** over Slint | MIT with no attribution obligation. The Elm architecture makes dry-run preview and undo fall out of the design, which matters because the operations are destructive. |
-| **Track latest**, not pinned | Accepted cost: the resolved version moves. `Cargo.lock` is the source of truth, and `cargo update` is a tested migration, not housekeeping. |
-| **FFmpeg LGPL**, dynamically linked | `--enable-gpl` would make the whole app GPL. LGPL keeps the app's own licensing free. Cost: no x264/x265, so H.264/H.265 encode goes through hardware encoders. |
+| **C# on .NET 10** | Nearest mainstream language to a Java background, which matters because development is AI-assisted and the maintainer reviews the output. Shared-memory parallelism without an FFI boundary. |
+| **Avalonia** over Iced (Rust) | Iced has no screen-reader support and cannot get it downstream; Avalonia ships UI Automation on Windows and NSAccessibility on macOS. Iced also has a bus factor near one, with foundational issues open five-plus years. |
+| **UI-free core** | The destructive paths must be exhaustively testable without a window. Also makes any future UI change a UI-layer change. |
+| **NativeAOT-compatible by design** | Startup is the most visible latency on a frequently launched utility. Compiled bindings and source generators cost nothing and keep the option open. |
+| **OS media APIs before FFmpeg** | Media Foundation and AVFoundation are free, hardware-accelerated, and already patent-licensed by Microsoft and Apple - sidestepping both the FFmpeg LGPL/GPL trap and the H.264 patent question. FFmpeg is the fallback for format coverage, LGPL and dynamically linked. |
 | **Closed-source, perpetual licence + free tier** | 12-month update window; the bought version runs forever. Private repo, so macOS CI bills at 10x and signing is mandatory. Licence checks are offline - there is no backend. |
-| **Accessibility gap accepted** | Personal and general-consumer tools, not procurement markets. See above. |
 
-Rejected: **Tauri** (JSON IPC on the hot path, plus a second language to review), **egui** (hand-rolled thumbnail caching, debug-UI look), **Flutter desktop** (isolates copy rather than share; FFI means a systems language anyway, plus Dart), **C# + Avalonia** (GC pauses on large scans; NativeAOT cannot cross-compile), **Qt** (memory-unsafe, dual-platform packaging upkeep), **Electron** (fails the performance bar outright).
+Rejected: **Rust + Iced** (no accessibility, single maintainer, and the performance edge does not materialize on an I/O-bound workload), **Compose Multiplatform** (Windows accessibility runs through Java Access Bridge, disabled by default on the primary platform), **JavaFX** (direct UI Automation but shrinking ecosystem and known screen-reader bugs), **Tauri** (IPC on the hot path, second language to review), **Electron** (fails the performance bar outright), **MAUI** (Mac Catalyst is an iPad shim and needs a Mac to build).
 
 ## Agents
 
 | Agent | Description |
 | ----- | ----------- |
-| `desktop-engineer` | Builds features end-to-end: GUI-free core, Iced wiring, preview and undo, persistence, platform integration, tests. Also triages panics, path bugs, hangs, and frozen windows. |
-| `desktop-tech-lead` | Holistic quality gate: staff-level review, GUI-free core discipline, refactoring direction, idiomatic Rust enforcement across changes. |
-| `desktop-performance-engineer` | Throughput and responsiveness: scan, hash, and decode cost, UI-thread blocking, allocation, caching, startup latency. |
-| `desktop-security-engineer` | Local-first threat model: path traversal, symlink and junction escape, TOCTOU on destructive operations, `unsafe` and FFI, dependency advisories, update integrity. |
-| `desktop-test-engineer` | Test strategy: core-crate unit tests, filesystem fixtures, destructive-operation and migration coverage, cross-platform CI matrix. |
+| `desktop-engineer` | Builds features end-to-end: UI-free core, Avalonia MVVM wiring, preview and undo, persistence, platform integration, tests. Also triages unhandled exceptions, path bugs, frozen UI threads, and binding failures. |
+| `desktop-tech-lead` | Holistic quality gate: staff-level review, UI-free core discipline, refactoring direction, idiomatic C# enforcement across changes. |
+| `desktop-performance-engineer` | Throughput and responsiveness: scan, hash, and decode cost, UI-thread blocking, GC pressure, caching, startup latency. |
+| `desktop-security-engineer` | Local-first threat model: path traversal, symlink and junction escape, TOCTOU on destructive operations, P/Invoke boundaries, dependency advisories, update integrity. |
+| `desktop-test-engineer` | Test strategy: core-library unit tests, filesystem fixtures, destructive-operation and migration coverage, cross-platform CI matrix. |
 
 ## Workflow Skills
 
@@ -81,7 +82,7 @@ Invoked as slash commands.
 
 | Skill | Purpose |
 | ----- | ------- |
-| `/task-desktop-implement` | End-to-end feature: GUI-free core, Iced wiring, preview and undo, persistence, platform integration, tests. |
+| `/task-desktop-implement` | End-to-end feature: UI-free core, MVVM wiring, preview and undo, persistence, platform integration, tests. |
 | `/task-desktop-review` | Staff-level umbrella review of the working tree. Auto-escalates into parallel perf and security lenses. |
 | `/task-desktop-review-perf` | Throughput and UI-responsiveness lens. |
 | `/task-desktop-review-security` | Local-first security lens. |
@@ -97,27 +98,26 @@ Composed automatically by the workflows. Not invocable directly.
 | ----- | ------- |
 | `behavioral-principles` | Behavioral guardrails loaded as Step 1 of every workflow. |
 | `review-precondition-check` | Resolves the working-tree change set and gates review workflows. |
-| `rust-language-patterns` | Ownership, borrowing, when `clone()` signals a design problem, `unsafe` justification, AI-generated Rust smells. |
-| `rust-error-handling` | `thiserror` at the core boundary vs `anyhow` in the app, propagation across threads, per-item batch failure, legitimate vs defective panics. |
-| `iced-architecture-patterns` | Model-Message-Update-View, message design, where state belongs, why `update` never blocks. |
-| `iced-widget-patterns` | Composition, virtualized lists for large result sets, the native 0.14 `table`, focus order, scanning/error/empty states. |
-| `iced-async-patterns` | `Task` and subscriptions, streamed progress, cancellation, integrating `rayon` without a second runtime. |
-| `desktop-core-architecture` | The GUI-free core rule: what lives in `core` vs `app`, injection seams, the plan-and-apply shape. |
-| `desktop-batch-operations` | Dry-run preview, undo journals, intra-batch and case-insensitive collisions, auto-suffix naming, per-item outcomes. |
-| `desktop-filesystem-patterns` | Traversal, non-UTF-8 paths, Windows reserved names and long paths, macOS NFD normalization, symlinks and junctions, atomic writes. |
-| `desktop-image-processing` | Thumbnail-resolution decode, bounded cache eviction, exact vs perceptual comparison, EXIF orientation. |
-| `desktop-concurrency-patterns` | `rayon` scan and when parallelism hurts, bounded pools, backpressure, cooperative cancellation, progress coalescing. |
-| `desktop-data-persistence` | `rusqlite` with `user_version` schema versioning, forward migrations with a fixture per shipped version, per-platform directories. |
-| `desktop-performance` | Two-tier hashing, hash selection, I/O ordering, allocation discipline, startup cost, evidence grading. |
+| `csharp-language-patterns` | Nullable reference types, records and structs, spans, LINQ cost, disposal, and AI-generated C# smells. |
+| `csharp-error-handling` | Exceptions vs result types at the core boundary, per-item batch outcomes, cancellation as control flow, filesystem exception handling. |
+| `csharp-async-patterns` | async/await, never `async void`, cancellation, `IProgress<T>`, bounded channels, dispatcher marshalling, progress coalescing. |
+| `avalonia-mvvm-patterns` | CommunityToolkit source generators, where state lives, commands, DI, dialogs without Window references. |
+| `avalonia-control-patterns` | XAML, virtualization for 100k-row results, templates, styles and themes, compiled bindings, focus order, empty and error states. |
+| `desktop-core-architecture` | The UI-free core rule: what lives in core vs UI, injection seams, the plan-and-apply shape, the brownfield recipe. |
+| `desktop-batch-operations` | Dry-run preview, undo journals, intra-batch and case-insensitive collisions, rename chains, auto-suffix naming, per-item outcomes. |
+| `desktop-filesystem-patterns` | Enumeration, Windows reserved names and long paths, macOS normalization, symlinks and junctions, atomic writes. |
+| `desktop-image-processing` | SkiaSharp scaled decode, bounded thumbnail cache, the dedup funnel, EXIF orientation, off-thread decode. |
+| `desktop-concurrency-patterns` | Parallelism that helps vs hurts, bounded channels, cooperative cancellation, progress coalescing, determinism. |
+| `desktop-data-persistence` | SQLite with `user_version` schema versioning, forward migrations with a fixture per shipped version, per-platform paths. |
+| `desktop-performance` | Two-tier hashing, GC and allocation discipline, SIMD, startup cost, evidence grading. |
 | `desktop-security-patterns` | Local-first threat model, path confinement, symlink and hardlink hazards, TOCTOU, untrusted file parsing, control types. |
-| `desktop-platform-integration` | Dialogs, drag-and-drop, tray, notifications, watching, clipboard, hotkeys, single-instance, credential storage. |
-| `desktop-accessibility` | Keyboard reachability, focus order and indicators, contrast, text scaling, no colour-only meaning - stated against Iced's actual support. |
-| `desktop-i18n` | Fluent catalogs, runtime locale switching, and the NFC/NFD filename divergence a rename tool hits directly. |
-| `desktop-build-release` | Release profile hazards, `cargo-packager`, Windows signing, macOS notarization without a Mac, CI matrix, auto-update. |
-| `desktop-gpu-compute` | wgpu compute for pixel work through Iced's re-export, staying GPU-side, the `tiny-skia` fallback. |
-| `desktop-media-processing` | Audio via `symphonia`/`cpal`/`rodio`; video behind a trait boundary, with the FFmpeg LGPL-vs-GPL trap. |
-| `desktop-ecosystem-boundaries` | The gap and trap register: hard blocks, silent-failure traps, and the escape hatch for each. |
-| `desktop-overengineering-review` | Necessity review for Rust and Iced abstractions - and the floor case, where structure is absent rather than excessive. |
+| `desktop-platform-integration` | Storage provider dialogs, drag-and-drop, tray, notifications, file watching, clipboard, credential storage. |
+| `desktop-accessibility` | Automation properties and peers, keyboard navigation, focus order, contrast, text scaling, and the gaps that need a real screen-reader test. |
+| `desktop-i18n` | Resource-based localization, culture switching, filename normalization divergence, locale-aware and natural sorting. |
+| `desktop-build-release` | Publish modes and NativeAOT, signing and notarization, licence enforcement, installers, auto-update, CI matrix. |
+| `desktop-media-processing` | OS media APIs first, FFmpeg as the fallback with LGPL discipline, audio decode vs playback vs analysis. |
+| `desktop-ecosystem-boundaries` | The gap and trap register: hard blocks, silent-failure traps, the Avalonia tier boundary, and the escape hatch for each. |
+| `desktop-overengineering-review` | Necessity review for C# and Avalonia abstractions - and the floor case, where structure is absent rather than excessive. |
 
 ## Notes
 

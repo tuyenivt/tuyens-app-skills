@@ -1,25 +1,25 @@
 ---
 name: task-desktop-review-perf
-description: Rust desktop performance review - scan throughput, hashing and decode cost, UI-thread blocking, allocation, caching, startup time.
+description: C# desktop performance review - UI-thread blocking, async misuse, GC and LOH pressure, hashing tiers, decode caching, startup time.
 agent: desktop-performance-engineer
 metadata:
   category: desktop
-  tags: [rust, iced, performance, throughput, filesystem, hashing, ui-thread, allocation, workflow]
+  tags: [csharp, avalonia, performance, throughput, ui-thread, gc, hashing, virtualization, startup, workflow]
   type: workflow
 user-invocable: true
 ---
 
 > **Behavioral directive:** Load `Use skill: behavioral-principles` before executing this workflow.
 
-# Rust Desktop Performance Review
+# C# Desktop Performance Review
 
-Throughput and responsiveness lens for a Rust desktop change set. Two distinct budgets: **work throughput** (how fast a scan, hash, or decode completes) and **UI responsiveness** (whether the window stays interactive while it runs). A change can pass one and fail the other.
+Throughput and responsiveness lens for a C# desktop change set. Two distinct budgets: **work throughput** (how fast a scan, hash, or decode completes) and **UI responsiveness** (whether the window stays interactive while it runs). A change can pass one and fail the other.
 
 ## When to Use
 
 - The umbrella review escalated `+perf`, or a perf lens was requested directly
 - A change adds traversal, hashing, decode, or a large in-memory collection
-- A change adds work to `update`, a view function, or a subscription
+- A change adds work to a command body, a property getter, a value converter, or an event handler
 
 **Not for:** feature design (`task-desktop-implement`), correctness review (`task-desktop-review`), or security (`task-desktop-review-security`).
 
@@ -38,17 +38,17 @@ Every finding states how its cost was established:
 
 | Evidence | Meaning |
 | --- | --- |
-| `measured` | A profile, benchmark, or timing was actually read. Name the tool and the machine |
+| `measured` | A profile, benchmark, or timing was actually read. Name the tool, the machine, and that it was a Release build |
 | `estimated` | Derived from the code's shape and a stated input size, with no profile |
 | `inferred` | The source was not read - only the diff or a filename. The weakest form; never the sole basis for a `[Must]` |
 
-**An `inferred` finding cannot be `[Must]`.** Raise it as `[Recommend]` and state what reading would confirm it. This cap exists because a perf claim with no evidence costs the reader more than silence.
+**An `inferred` finding cannot be `[Must]`.** Raise it as `[Recommend]` and state what reading would confirm it. This cap exists because a perf claim with no evidence costs the reader more than silence. Read the touched source beyond the diff before settling evidence wherever the files are readable: `inferred` is for a surface that could not be read, not one that was not.
 
 State the input scale a finding assumes. "Slow" without a file count, image size, or item count is not a finding.
 
 ## Excluded Surfaces
 
-`target/`, `dist/`, generated bindings, and vendored third-party sources are never findings. A debug-build timing is not evidence for a release-build claim - `image` decode in particular is dramatically slower in debug builds because its SIMD paths are disabled, so a debug measurement of decode cost is not a finding.
+`bin/`, `obj/`, `publish/`, generated files, and vendored third-party sources are never findings. Test projects are non-shipped assemblies and file nothing in this lens, and `review-*.md` reports left by earlier runs are not part of any change set. A Debug-build timing is not evidence for a Release-build claim - the JIT leaves Debug code unoptimized by design, which is why BenchmarkDotNet refuses to run one; a Debug measurement cannot even rank two approaches.
 
 ## Invocation
 
@@ -58,7 +58,7 @@ State the input scale a finding assumes. "Slow" without a file count, image size
 | `/task-desktop-review-perf --staged` | Standalone against the staged change set |
 | `/task-desktop-review-perf deep` | Force `deep` depth |
 
-When invoked as a subagent (e.g. by `task-desktop-review`), the parent supplies the precondition handle, the pre-read diff, the depth level, the detected project shape, and the excluded-surface list: Step 3 is skipped, no git is re-run, and Step 11 returns findings instead of writing - the parent owns the report.
+When invoked as a subagent (e.g. by `task-desktop-review`), the parent supplies the precondition handle, the pre-read diff, the depth level, the detected project shape, and the reviewable-surface table whose excluded rows are the excluded surfaces: Step 3 is skipped, no git is re-run, and Step 11 returns findings instead of writing - the parent owns the report.
 
 ## Workflow
 
@@ -68,9 +68,9 @@ Use skill: `behavioral-principles`. Accept the parent's confirmation if invoked 
 
 ### Step 2 - Stack and Project Shape
 
-Accept the project shape from the parent when invoked as a subagent. Otherwise read `Cargo.toml`; if it is absent, stop - this workflow reviews Rust projects only.
+Accept the project shape from the parent when invoked as a subagent. Otherwise read the `.csproj` files; if none exists, stop - this workflow reviews .NET projects only.
 
-Record the resolved Iced version (from the parent's shape as a subagent; from `Cargo.lock` standalone - the manifest holds a range under this project's track-latest policy), the async runtime, whether `rayon` is present, and the release profile settings (`opt-level`, `lto`, `codegen-units`, `debug-assertions`). A release profile with `opt-level = 0` or `debug-assertions = true` changes every cost claim in this review; state it if found. The parent's shape does not carry the release profile: in subagent mode read it from `Cargo.toml` directly - a file read, not git - and state a distorting profile inside the Evidence line of each finding it affects.
+Record the Avalonia version (from the parent's shape as a subagent; from the PackageReference standalone), the publish mode (`PublishAot`, `PublishTrimmed`, self-contained, framework-dependent), and the GC configuration (`ServerGarbageCollection`, `ConcurrentGarbageCollection`). Publish mode moves first-paint cost by roughly 4x - ~1960 ms to first frame for a self-contained JIT build against ~460 ms under NativeAOT - so it reframes every startup claim. The parent's shape does not carry the publish properties: in subagent mode read them from the `.csproj` (and `Directory.Build.props`) directly - a file read, not git - and state a distorting configuration inside the Evidence line of each finding it affects.
 
 ### Step 3 - Resolve the Change Set
 
@@ -82,24 +82,26 @@ Use skill: `review-precondition-check`. Forward `--staged` if passed. Read `git 
 
 Use skill: `desktop-performance`. Establish what the change actually costs before judging it: which paths are per-item, what the expected item count is, and where the work runs.
 
-Classify every added path as one of: **per-item** (runs once per file, image, or row), **per-batch** (runs once per operation), or **per-frame** (runs in `update`, a view function, or a subscription tick). The same code costs differently in each.
+Classify every added path as one of: **per-item** (runs once per file, image, or row), **per-batch** (runs once per operation), or **per-notification** (runs in a property getter a binding reads, a value converter, a `CollectionChanged` handler, or on every keystroke). The same code costs differently in each.
+
+Steps 5-10 load their `Use skill:` atomics only when the diff contains that step's surface; a surface class the diff does not contain is recorded on the `Not filed:` block's closing line, not skill-loaded. Step 10's evidence assignment is exempt - it runs over every finding regardless of which surfaces appeared.
 
 ### Step 5 - UI-Thread Blocking
 
-The highest-value finding this lens makes. Filesystem I/O, hashing, decode, a lock acquisition, or any unbounded loop inside `update` or a view function freezes the window - the user sees a hung app, and Windows will paint it "Not Responding".
+The highest-value finding this lens makes. Filesystem I/O, hashing, decode, a synchronous SQLite query, a lock acquisition, `.Result`/`.Wait()`/`.GetAwaiter().GetResult()`, or any unbounded loop inside a command body, property getter, value converter, or event handler freezes the window - the user sees a hung app, and Windows will paint it "Not Responding". `async void` outside an event handler is the same family's correctness face: completion cannot be awaited, so the caller cannot even know the work is still running.
 
-Use skill: `iced-async-patterns` for the correct dispatch. Check that long work is a `Task` or subscription, that progress arrives as messages rather than a polled block, and that cancellation is observed rather than awaited.
+Use skill: `csharp-async-patterns` for the correct dispatch. Check that long work runs through an async command or `Task.Run` at the UI-layer call site, that progress arrives coalesced through `IProgress<T>` (per chunk or per interval, never per item at 40k items/sec), and that cancellation is observed inside the work loop rather than awaited.
 
-A view function that formats, sorts, or filters a large collection on every redraw is this defect in a slower form.
+Two slower forms of the same defect: a value converter or getter that formats, sorts, or filters a large collection on every binding evaluation; and an unvirtualized list bound to user-scale data - an `ItemsControl` or `StackPanel` items panel realizing a control per row, or a virtualized list wrapped in an outer `ScrollViewer` that silently disables its virtualization (`avalonia-control-patterns`).
 
 ### Step 6 - Traversal and I/O Cost
 
 Use skill: `desktop-filesystem-patterns` for traversal shape. Check:
 
 - A directory walked more than once per operation, where one walk would serve
-- `metadata()` or `symlink_metadata()` called repeatedly for a path already stated
+- `Directory.GetFiles` materializing the whole tree where `EnumerateFiles` streams
+- A `new FileInfo(path)` or repeated stat for a path whose metadata was already read
 - Traversal that reads file contents when only size or mtime is needed
-- Per-entry allocation of a `PathBuf` where a borrowed `Path` would do
 - I/O ordering that ignores physical placement on a spinning disk, where the scan is large enough to matter
 - A watcher firing per-event without debouncing
 
@@ -107,50 +109,48 @@ Use skill: `desktop-filesystem-patterns` for traversal shape. Check:
 
 The dominant cost in a dedup workload, and the place where an algorithmic fix beats any micro-optimization.
 
-Check for the **two-tier prefilter**: group by size first, then hash only within collision groups, and read a partial prefix before the full file. A change that full-hashes every file in a tree has an algorithmic defect, not a constant-factor one - state the file-count scale at which it becomes user-visible.
+Check for the **two-tier prefilter**: group by size first, then hash only within collision groups, and read a partial head-plus-tail prefix before the full file. A change that full-hashes every file in a tree has an algorithmic defect, not a constant-factor one - state the file-count scale at which it becomes user-visible.
 
-Check the hash choice: a cryptographic hash where a fast non-cryptographic one suffices is wasted throughput. Content identity for dedup does not require collision resistance against an adversary; state the exposure if the app treats hash equality as proof for a destructive action.
+Check the hash choice: a cryptographic hash where XxHash3 (`System.IO.Hashing`) suffices is wasted throughput - the fast hash saturates any disk, so the disk is the bottleneck. Content identity for dedup does not require collision resistance against an adversary; state the exposure if the app treats hash equality as proof for a destructive action.
 
 ### Step 8 - Decode, Thumbnails, and Caching
 
 Use skill: `desktop-image-processing`. Check:
 
-- Full-resolution decode where a thumbnail-sized decode would serve
+- Full-resolution decode where a thumbnail-sized decode would serve - a 6000x4000 JPEG is 96 MB of BGRA for a 200 px thumbnail
 - Decode on the UI thread
 - A thumbnail cache with no eviction policy - unbounded growth is a memory defect that presents as a slowdown
-- Re-decoding on every scroll rather than caching the decoded texture
+- Re-decoding on every scroll rather than caching the decoded bitmap
 - A cache keyed so that it never hits
+- `SKBitmap`/`SKCodec` instances not disposed - native memory the GC cannot see, presenting as process growth no managed profiler attributes
 
-Use skill: `desktop-gpu-compute` when pixel work is heavy enough that the GPU is the right answer, and check that the wgpu device is Iced's rather than a second one.
+### Step 9 - Allocation, GC, and Collections
 
-### Step 9 - Allocation, Cloning, and Collections
+Use skill: `csharp-language-patterns` for the mechanics. Check:
 
-Use skill: `rust-language-patterns` for the mechanics. Check:
-
-- `clone()` on a large owned value inside a per-item loop
-- `to_vec()`, `to_owned()`, or `collect()` materializing a collection an iterator would stream
-- A `String` built by repeated `push_str` in a loop without capacity
-- `Vec` growth without `with_capacity` where the size is known
+- GC pressure on a per-item path: a fresh buffer per file - a 256 KB `byte[]` per item sits over the 85,000-byte LOH threshold, so the loop creates one Large Object Heap allocation per file; rent from `ArrayPool<T>` instead
+- A LINQ chain on a per-item path over a large file set - enumerator and delegate allocation are real cost there, and a `foreach` is the fix
+- `ToList()` or `ToArray()` materializing a collection an enumeration would stream
+- A string built by repeated concatenation in a loop
+- `ObservableCollection<T>` loaded by per-item `Add` over a large result set - 100k Adds are 100k change notifications through the binding system; swap in a read-only list property for one notification
 - A collection holding every scanned entry when the UI only renders a window of them
-- `Arc<Mutex<>>` contention on a per-item path where partitioned ownership would avoid the lock
+- Lock contention on a per-item path where partitioned ownership would avoid the lock
 
 ### Step 10 - Concurrency, Startup, and Evidence
 
-Use skill: `desktop-concurrency-patterns`. Check parallelism actually helps: a `rayon` pool over an I/O-bound walk can be slower than a sequential one on a single spinning disk, and thread-per-item is a defect at any scale. Check backpressure - an unbounded channel from a fast producer to a slow consumer is a memory defect.
+Use skill: `desktop-concurrency-patterns`. Check parallelism actually helps: `Parallel.ForEach` over an I/O-bound walk can be slower than a sequential one on a single spinning disk, and unbounded degree-of-parallelism or thread-per-item is a defect at any scale. Check backpressure - an unbounded channel from a fast producer to a slow consumer is a memory defect; `Channel.CreateBounded` is the fix.
 
-Check startup cost: work done before the first frame is the most visible latency the app has. A scan, a migration, or a cache warm on the startup path belongs behind the first paint. A startup-path finding's budget is UI responsiveness - first-paint delay is perceived responsiveness, not throughput.
-
-**Windows GPU startup.** wgpu may find no adapter under a VM, and defaults to the low-power iGPU on hybrid laptops. Iced's backend configuration is environment-variable-only, so a change that assumes a discrete GPU or a specific backend without a `tiny-skia` fallback path is a finding.
+Check startup cost: work done before the first frame is the most visible latency the app has. A scan, a migration, or a cache warm on the startup path belongs behind the first paint. A startup-path finding's budget is UI responsiveness - first-paint delay is perceived responsiveness, not throughput. Weigh the claim against the publish mode recorded at Step 2: an app already paying ~2 s of JIT startup hides a 100 ms scan; an AOT app does not.
 
 Then assign evidence to every finding per the Measurement Discipline table.
 
 ### Step 11 - Write Report
 
-**Standalone only.** A subagent run returns the `## Findings` sections and, at `deep`, the `## Measurement Plan` - nothing else. No frontmatter, no Summary block, no Recommendations, no Next Steps: the parent owns those and cannot merge two of them. Project-shape values the parent already supplied are not echoed back.
+**Standalone only.** A subagent run returns the `## Findings` sections (tier headings, labels, and the closing `Not filed:` block included), a one-line `## Build Configuration` section carrying the Step 2 publish-mode and GC reading, a one-line `## Scale Assumed` section carrying the input scale the findings rest on - the parent's Summary has no slot for either - and, at `deep`, the `## Measurement Plan`. Nothing else: no frontmatter, no Summary block, no Recommendations, no Next Steps - the parent owns those and cannot merge two of them. Other project-shape values the parent already supplied are not echoed back.
 
 A subagent that has something for `Unattributed` - a reported symptom the change set does not explain, or a profile-revealed condition it did not cause - returns it as a final `## Unattributed` section for the parent to fold into its Summary. Intent (`[Must]` / `[Recommend]`) is stated per finding so the parent can order Next Steps without re-deriving it.
 
-Standalone: write to `review-perf-<branch>.md` in the current working directory, overwriting if it exists. Sanitize `<branch>` from the handle's `current_branch`: replace `/` and any character outside `[A-Za-z0-9_-]` with `-`, collapse consecutive `-`, strip leading and trailing `-`.
+Standalone: write to `review-perf-<branch>.md` at the reviewed repository's root, overwriting if it exists. Sanitize `<branch>` from the handle's `current_branch`: replace `/` and any character outside `[A-Za-z0-9_-]` with `-`, collapse consecutive `-`, strip leading and trailing `-`.
 
 ```yaml
 ---
@@ -173,12 +173,14 @@ Report written to review-perf-<branch>.md (<N> files, scope: perf)
 
 The fence below delimits the template for display only. Emit the report body as raw Markdown; never wrap the whole report in a code fence.
 
-```markdown
-## Rust Desktop Performance Review Summary
+This template is the only envelope. Atomic skills consulted en route contribute analysis; their own output contracts, status lines, and severity vocabulary do not survive into the report - every defect they surface is re-expressed as a finding in this shape.
 
-**Assessment:** Approve | Request Changes | Discuss
-**Release Profile:** opt-level=<N>, lto=<setting>, debug-assertions=<bool> | not read
-**Dominant Cost:** [the single largest cost this change adds, in one line | none - the change adds no per-item, per-batch, or per-frame cost]
+```markdown
+## C# Desktop Performance Review Summary
+
+**Assessment:** Approve | Request Changes | Discuss _(Request Changes when any `[Must]` stands; Discuss when the open question is a tradeoff rather than a cost; Approve otherwise)_
+**Build Configuration:** publish mode <NativeAOT | self-contained | framework-dependent>, GC <settings | defaults - neither property set> | not read
+**Dominant Cost:** [the single largest cost this change adds, in one line | none - nothing beyond trivial one-shot per-batch cost]
 **Scale Assumed:** [the item count, file size, or tree size the findings assume | n/a - no findings]
 **Unattributed:** [reported symptoms this change set does not explain, and any profile-revealed condition the diff did not cause - each with what would attribute it | none]
 
@@ -189,9 +191,9 @@ The fence below delimits the template for display only. Emit the report body as 
 #### [Must] file:line
 - **Issue:** [the pattern, named]
 - **Cost:** [what it costs, at the stated scale]
-- **Budget:** [work throughput | UI responsiveness | both]
-- **Evidence:** measured (<tool>, <machine>, release) | estimated (no profile) | inferred (no source read)
-- **Fix:** [concrete Rust change]
+- **Budget:** [every budget that applies, comma-separated: work throughput | UI responsiveness | memory] _(memory: unbounded growth - a cache without eviction, an unbounded channel - presenting later as slowdown or OOM)_
+- **Evidence:** measured (<tool>, <machine>, Release) | estimated (no profile) | inferred (no source read)
+- **Fix:** [concrete C# change]
 
 ### Medium Impact / Low Impact
 [same shape, `[Recommend]`]
@@ -211,38 +213,38 @@ The fence below delimits the template for display only. Emit the report body as 
 
 **Omit empty sections.** No High Impact heading if there are none.
 
-When the run files nothing, `## Findings` is written as `none.` followed by one line per surface this lens examined and deliberately did not file (a non-per-item `clone()`, a runtime-neutral profile change), each with the suppressing rule - a clean run distinguishes examined from unexamined.
+`## Findings` closes with a `Not filed:` block - one line per surface the diff contains that this lens examined and did not file, each naming why: suppressed by a rule (a non-per-item allocation, a runtime-neutral `.csproj` change), excluded (a test project), or examined and clean; `routed: <file:line> -> <owner>` lines for observations that belong to the umbrella or another lens, which a filed finding on the same line does not replace; and one closing line `not present in this change set: <list>` for the surface classes the diff does not contain. When the run files nothing, `## Findings` is `none.` followed by the same block, and Recommendations and Next Steps are omitted - a clean run distinguishes examined from unexamined.
 
-**Impact tier is set by cost, label by evidence.** An `inferred` finding whose cost is High Impact stays under `### High Impact` labeled `[Recommend]` - the evidence cap changes the label, never the tier. An `inferred` finding with no source read anchors to the file path alone; a line number is never invented.
+**Impact tier is set by cost, label by evidence.** High Impact is a cost the user feels at the stated scale - an algorithmic regression, a frozen window, unbounded growth; Medium is measurable but not perceptible there; Low is a constant-factor cleanup. A High Impact finding is `[Must]`, every other tier `[Recommend]`. An `inferred` finding whose cost is High Impact stays under `### High Impact` labeled `[Recommend]` - the evidence cap changes the label, never the tier. An `inferred` finding with no source read anchors to the file path alone; a line number is never invented.
 
 ## Self-Check
 
 - [ ] `behavioral-principles` loaded (or accepted from parent)
-- [ ] Project shape accepted from parent, or `Cargo.toml` read; release profile recorded
+- [ ] Project shape accepted from parent, or `.csproj` read; publish mode and GC configuration recorded
 - [ ] Step 3: handle resolved (or received); diff read once; excluded surfaces skipped
-- [ ] Every added path classified per-item / per-batch / per-frame
-- [ ] UI-thread blocking checked in `update`, view functions, and subscriptions
-- [ ] Traversal cost, repeated walks, and per-entry allocation checked
+- [ ] Every added path classified per-item / per-batch / per-notification
+- [ ] UI-thread blocking checked in command bodies, property getters, value converters, and event handlers; `.Result`/`.Wait()` and `async void` checked
+- [ ] Unvirtualized lists and converter-side sorting or filtering checked
+- [ ] Traversal cost, repeated walks, and repeated stats checked
 - [ ] Two-tier hashing prefilter checked; algorithmic defects named as algorithmic
-- [ ] Decode resolution, decode thread, and cache eviction checked
-- [ ] Allocation, cloning, and collection materialization checked
-- [ ] Parallelism checked for actual benefit; backpressure checked; startup path checked
-- [ ] Windows GPU adapter and `tiny-skia` fallback checked where the change touches rendering setup
-- [ ] Every finding states evidence, budget, and the scale it assumes
+- [ ] Decode resolution, decode thread, cache eviction, and native-memory disposal checked
+- [ ] Allocation, LOH pressure, LINQ hot paths, and `ObservableCollection` Add storms checked
+- [ ] Parallelism checked for actual benefit; backpressure checked; startup path checked against the publish mode
+- [ ] Every finding states evidence, every budget that applies, and the scale it assumes
 - [ ] No `inferred` finding raised as `[Must]`
-- [ ] No debug-build timing used as evidence for a release claim
-- [ ] Step 11: standalone: report written to `review-perf-<branch>.md` with the sanitized branch name and complete frontmatter; confirmation line printed; subagent: Findings (plus the deep-only plan, plus `Unattributed` where there is one) returned to parent, no Summary or Next Steps, no file written
+- [ ] No Debug-build timing used as evidence for a Release claim
+- [ ] Step 11: standalone: report written to `review-perf-<branch>.md` at the repo root with the sanitized branch name and complete frontmatter; confirmation line printed; subagent: Findings with the `Not filed:` block, `Build Configuration`, `Scale Assumed`, the deep-only plan, and `Unattributed` where there is one returned to parent, no Summary or Next Steps, no file written
 - [ ] Reported symptoms the change set does not explain recorded in `Unattributed` rather than dropped
 
 ## Avoid
 
 - Writing a report when invoked as a subagent - the parent owns it
-- Returning the whole Output Format as a subagent - only `## Findings`, the deep-only `## Measurement Plan`, and `## Unattributed` are returned
+- Returning the whole Output Format as a subagent - only `## Findings`, `## Build Configuration`, `## Scale Assumed`, the deep-only `## Measurement Plan`, and `## Unattributed` are returned
 - A `[Must]` resting on `inferred` evidence
 - A cost claim with no stated input scale
-- A debug-build measurement presented as a release-build cost
+- A Debug-build measurement presented as a Release-build cost
 - Micro-optimizations recommended ahead of an algorithmic fix in the same change set
-- Flagging `clone()` that is not on a per-item path
-- Recommending `rayon` for an I/O-bound walk without stating the disk assumption
+- Flagging an allocation or LINQ chain that is not on a per-item path
+- Recommending `Parallel.ForEach` for an I/O-bound walk without stating the disk assumption
 - Correctness or security findings - route them to the umbrella or the security lens
-- Raising findings against `target/`, `dist/`, or vendored sources
+- Raising findings against `bin/`, `obj/`, `publish/`, or vendored sources

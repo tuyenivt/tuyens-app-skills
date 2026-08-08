@@ -1,9 +1,9 @@
 ---
 name: desktop-data-persistence
-description: Local storage for Rust desktop apps - rusqlite bundled, user_version migrations with fixtures, per-platform dirs, atomic settings, cache invalidation.
+description: Persist local data with Microsoft.Data.Sqlite - user_version migrations with fixtures, per-platform dirs, atomic settings, cache invalidation.
 metadata:
   category: desktop
-  tags: [rust, rusqlite, sqlite, sled, redb, migration, user-version, directories, settings, cache-invalidation, local-first]
+  tags: [csharp, dotnet, sqlite, microsoft-data-sqlite, migration, user-version, special-folder, settings, source-generated-json, cache-invalidation, local-first]
 user-invocable: false
 ---
 
@@ -11,7 +11,7 @@ user-invocable: false
 
 > Confirm what the data is worth before choosing a store - a rebuildable scan cache and a user's saved rename presets have different durability requirements, and treating the cache as precious is wasted work.
 >
-> This skill owns **choosing a store, versioning its schema, and locating its files**. The temp-file-plus-rename mechanics belong to `desktop-filesystem-patterns` (an `AtomicWrite` finding is still owned here); journal replay and undo semantics to `desktop-batch-operations`; query throughput and index cost to `desktop-performance`; whether a database is warranted at all to `desktop-overengineering-review`; what ships in the installer to `desktop-build-release`.
+> This skill owns **choosing a store, versioning its schema, and locating its files**. The temp-file-plus-move mechanics belong to `desktop-filesystem-patterns` (an `AtomicWrite` finding is still owned here); journal replay and undo semantics to `desktop-batch-operations`; query throughput and index cost to `desktop-performance`; whether a database is warranted at all to `desktop-overengineering-review`; what ships in the installer to `desktop-build-release`.
 
 ## When to Use
 
@@ -22,13 +22,13 @@ user-invocable: false
 
 ## Rules
 
-- **`rusqlite` with the `bundled` feature is the default store.** It compiles SQLite from source, so there is no system dependency to hunt on either platform and no version skew between a developer machine and a user's
-- **`sled` is dead. Do not introduce it.** The published release is 0.34.7 from 2021 and the 1.0 alpha line stalled in 2024. `redb` is alive but has broken its on-disk format twice, so adopting it means owning format-migration code the app did not ask for. `sled` found already shipped - or introduced in the diff under review - is a `StoreChoice` finding, not an emergency: the fix is a one-time import into (or a redirect to) SQLite - High when the store holds data the user cannot regenerate, Medium otherwise
+- **`Microsoft.Data.Sqlite` is the default store.** Its default package bundles the native SQLite library, so there is no system dependency to hunt on either platform and no version skew between a developer machine and a user's
 - Schema version lives in SQLite's `user_version` pragma. A version tracked in a side file drifts from the database it describes
 - **Migrations are forward-only and each one ships with a fixture database from the version it upgrades.** A migration tested only against a freshly-created schema is untested
-- Config and data directories come from the `directories` crate. A hardcoded `~/.myapp` or `%APPDATA%\myapp` is wrong on at least one target
+- Config and data directories come from `Environment.GetFolderPath` per platform. A hardcoded path, or one beside the executable, is wrong on at least one target
 - **Settings are written atomically.** A crash during a settings write must not leave the user with no settings
 - **A cache entry is invalid unless `(path, size, mtime)` all match.** Path alone is a stale-result generator
+- Serialization is source-generated (`JsonSerializerContext`). Reflection-based `JsonSerializer` calls fail under NativeAOT - at runtime, on a user's machine
 - A corrupt cache is deleted and rebuilt. A corrupt settings file is reported, backed up, and replaced with defaults - never silently overwritten
 
 ## Patterns
@@ -37,41 +37,40 @@ user-invocable: false
 
 | Data | Store | Why |
 | --- | --- | --- |
-| Scan cache, hashes, thumbnail index | SQLite (`rusqlite`, `bundled`) | Indexed lookup by path, survives restart, deletable and rebuildable |
-| User settings and presets | TOML or JSON file, atomically written | Human-readable, diffable, editable when the app will not start |
+| Scan cache, hashes, thumbnail index | SQLite (`Microsoft.Data.Sqlite`) | Indexed lookup by path, survives restart, deletable and rebuildable |
+| User settings and presets | JSON file, atomically written | Human-readable, diffable, editable when the app will not start |
 | Window geometry, last folder | Same settings file | Small, low-stakes |
-| Undo journal for a running batch | Append-only file or a SQLite table, in `data_dir` - never `cache_dir` | Must survive a kill mid-run and a cache wipe (`desktop-batch-operations`) |
+| Undo journal for a running batch | Append-only file or a SQLite table, in the data directory - never the cache directory | Must survive a kill mid-run and a cache wipe (`desktop-batch-operations`) |
 | Anything the user cannot regenerate | SQLite, with a backup before migration | Durability is the requirement |
 
-For a solo-maintained utility, one SQLite file plus one settings file covers everything. A second store is a second migration story, a second corruption story, and a second backup story.
+For a solo-maintained utility, one SQLite cache, one journal store, and one settings file cover everything - the journal is separate from the cache because they live in different directories with different corruption stories. Any store beyond those three needs its migration and corruption story named.
 
-```toml
-# app/Cargo.toml - no system SQLite required on Windows or macOS
-rusqlite = { version = "0.40", features = ["bundled"] }
+EF Core is available and is usually overkill here: for a scan cache with a handful of tables, hand-written SQL - or Dapper when the mapping grows tiresome - is the lighter path, with no model building at startup, no second migration mechanism competing with `user_version`, and no NativeAOT constraints to work around.
+
+```xml
+<!-- The default package bundles native SQLite; nothing to install on either platform -->
+<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
 ```
-
-Without `bundled`, the build links the system SQLite, which does not exist on a stock Windows machine and varies by version on macOS. That is a support burden a solo maintainer pays for repeatedly.
 
 ### Schema versioning with `user_version`
 
-```rust
-// Bad - version tracked beside the database; a restored .db with a stale .json
-// version file runs the wrong migrations against the wrong schema
-let v: u32 = fs::read_to_string(dir.join("schema_version"))?.parse()?;
+```csharp
+// Bad - version tracked beside the database; a restored .db with a stale version
+// file runs the wrong migrations against the wrong schema
+var v = int.Parse(File.ReadAllText(Path.Combine(dir, "schema_version")));
 
 // Good - the version travels inside the file it describes, and each step is one
 // transaction: schema change and version bump commit together or not at all
-fn migrate(conn: &mut Connection) -> Result<()> {
-    let v: u32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if v == 0 { step(conn, V1, 1)?; }
-    if v <= 1 { step(conn, V2, 2)?; }
-    Ok(())
+static void Migrate(SqliteConnection conn) {
+    var v = Scalar<long>(conn, "PRAGMA user_version");
+    if (v == 0) Step(conn, V1Sql, 1);
+    if (v <= 1) Step(conn, V2Sql, 2);
 }
-fn step(conn: &mut Connection, sql: &str, to: u32) -> Result<()> {
-    let tx = conn.transaction()?;
-    tx.execute_batch(sql)?;
-    tx.pragma_update(None, "user_version", to)?;
-    tx.commit()
+static void Step(SqliteConnection conn, string sql, int to) {
+    using var tx = conn.BeginTransaction();
+    Exec(conn, tx, sql);
+    Exec(conn, tx, $"PRAGMA user_version = {to}");
+    tx.Commit();
 }
 ```
 
@@ -89,69 +88,92 @@ tests/fixtures/
   v2.db      # created by the binary that shipped as v2
 ```
 
-```rust
-#[test]
-fn migrates_every_shipped_version_to_current() {
-    for fixture in ["v1.db", "v2.db"] {
-        let db = copy_to_temp(fixture);
-        let mut conn = Connection::open(&db).unwrap();
-        migrate(&mut conn).unwrap();
-        assert_eq!(current_version(&conn), CURRENT);
-        assert!(scan_cache_readable(&conn));       // data survived, not just the schema
-    }
+```csharp
+[Theory]
+[InlineData("v1.db"), InlineData("v2.db")]   // grows per release; old entries never leave
+public void Migrates_every_shipped_version_to_current(string fixture) {
+    using var conn = Open(CopyToTemp(fixture));
+    Migrate(conn);
+    Assert.Equal(Current, Scalar<long>(conn, "PRAGMA user_version"));
+    Assert.True(ScanCacheReadable(conn));   // data survived, not just the schema
 }
 ```
 
-A migration validated only against `migrate(fresh_db())` passes while silently dropping every existing row, because a fresh database has no rows to drop. The fixture is committed when the version ships; recreating it later from current code defeats the purpose.
+A migration validated only against `Migrate(freshDb)` passes while silently dropping every existing row, because a fresh database has no rows to drop. The fixture is committed when the version ships; recreating it later from current code defeats the purpose. Never delete an old fixture - installed users are still on it.
+
+### The undo journal's store
+
+Append-only, one row per completed step, committed before the next destructive step executes:
+
+```sql
+CREATE TABLE journal (seq INTEGER PRIMARY KEY, op TEXT NOT NULL,
+                      from_path TEXT NOT NULL, to_path TEXT, at_utc TEXT NOT NULL);
+PRAGMA journal_mode = WAL;   -- a mid-run kill leaves committed rows readable
+```
+
+One transaction per record, WAL mode, in the data directory - that is the durability floor for a store whose purpose is surviving a kill. The running batch never updates or deletes rows; replay and undo semantics belong to `desktop-batch-operations`.
 
 ### Per-platform directories
 
-```rust
-// Bad - wrong on Windows, wrong on macOS, and unwriteable next to the exe under Program Files
-let cfg = PathBuf::from(std::env::var("HOME")?).join(".myapp/config.toml");
+```csharp
+// Bad - unwriteable beside the exe under Program Files, wrong inside a macOS bundle
+var cfg = Path.Combine(AppContext.BaseDirectory, "settings.json");
 
-// Good
-let dirs = ProjectDirs::from("com", "Example", "MyApp")
-    .ok_or(Error::NoHomeDirectory)?;
-let config = dirs.config_dir();   // %APPDATA%\Example\MyApp\config   |  ~/Library/Application Support/com.Example.MyApp
-let data   = dirs.data_dir();     // %APPDATA%\Example\MyApp\data
-let cache  = dirs.cache_dir();    // %LOCALAPPDATA%\Example\MyApp\cache  |  ~/Library/Caches/...
+// Good - platform conventions via SpecialFolder, split by what survives a cleanup
+var config = Path.Combine(Environment.GetFolderPath(
+    Environment.SpecialFolder.ApplicationData), "MyApp");
+    // %APPDATA%\MyApp  |  ~/Library/Application Support/MyApp
+var cache = OperatingSystem.IsMacOS()
+    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        "Library", "Caches", "MyApp")
+    : Path.Combine(Environment.GetFolderPath(
+        Environment.SpecialFolder.LocalApplicationData), "MyApp");
+Directory.CreateDirectory(config);
+Directory.CreateDirectory(cache);
 ```
 
-The split is load-bearing: `cache_dir` is a location the OS and cleanup tools may empty, which is exactly right for a rebuildable scan cache and exactly wrong for settings. Putting the database in `cache_dir` and the settings in `config_dir` means a cache wipe costs a rescan and nothing else.
+Since .NET 8, `ApplicationData` resolves to the Apple-conventional `~/Library/Application Support` on macOS (earlier runtimes returned `~/.config`); there is no `SpecialFolder` for macOS caches, so that one is built from `UserProfile`.
 
-`ProjectDirs::from` returns `None` when no home directory can be determined. Handle it as an error with a clear message rather than unwrapping into a panic at startup.
+The split is load-bearing: the cache directory is a location the OS and cleanup tools may empty, which is exactly right for a rebuildable scan cache and exactly wrong for settings and the undo journal. Putting the database in cache and the settings in config means a cache wipe costs a rescan and nothing else. Create the directories before the first write; they do not exist on a fresh install.
 
-Create directories with `create_dir_all` before the first write; they do not exist on a fresh install.
+### Atomic settings writes, source-generated serialization
 
-### Atomic settings writes
+```csharp
+// Bad - reflection-based serialization fails under NativeAOT, and a crash
+// mid-write loses every setting the user had
+File.WriteAllText(path, JsonSerializer.Serialize(settings));
 
-```rust
-// Bad - a crash between truncate and write loses every setting the user had
-fs::write(&path, toml::to_string(&settings)?)?;
+// Good - source-generated context; temp-then-move mechanics per desktop-filesystem-patterns
+[JsonSerializable(typeof(Settings))]
+public partial class SettingsContext : JsonSerializerContext { }
 
-// Good - the live file is only ever replaced by a complete one
-let tmp = NamedTempFile::new_in(path.parent().unwrap())?;
-tmp.as_file().write_all(toml::to_string_pretty(&settings)?.as_bytes())?;
-tmp.as_file().sync_all()?;
-tmp.persist(&path)?;
+var json = JsonSerializer.Serialize(settings, SettingsContext.Default.Settings);
+AtomicFile.Replace(path, json);   // temp file, flush to disk, File.Move overwrite
 ```
 
-Deserialize with every field defaulted (`#[serde(default)]`) so a settings file written by an older version still loads, and an unknown field from a newer version is ignored rather than fatal. A settings struct that fails to parse on a missing field turns an added setting into a startup crash for every existing user. Ignoring is not enough on re-save: an older binary that saves the file strips fields it does not know - round-trip unknown keys (e.g. `#[serde(flatten)]` into a table) so an installed older build does not silently drop a newer version's settings.
+Every settings property carries a default so a file written by an older version still loads, and an unknown field from a newer version is ignored rather than fatal. Ignoring is not enough on re-save: an older binary that saves the file strips fields it does not know - round-trip them so an installed older build does not silently drop a newer version's settings:
 
-On a parse failure: rename the bad file to `settings.toml.bak`, start with defaults, and tell the user where the old file went. Silently overwriting destroys the evidence they would need to recover a long-tuned configuration.
+```csharp
+public sealed class Settings {
+    public int ThumbnailSize { get; set; } = 200;   // defaulted: an older file still loads
+    [JsonExtensionData]                             // a newer version's keys survive
+    public Dictionary<string, JsonElement>? Unknown { get; set; }
+}
+```
+
+On a parse failure: rename the bad file to `settings.json.bak`, start with defaults, and tell the user where the old file went. Silently overwriting destroys the evidence they would need to recover a long-tuned configuration.
 
 ### Scan-cache invalidation
 
-```rust
-// Bad - path is the only key; an edited file serves its old hash forever
-"SELECT hash FROM files WHERE path = ?1"
+```sql
+-- Bad - path is the only key; an edited file serves its old hash forever
+SELECT hash FROM files WHERE path = $path
 
-// Good - the entry is only valid if the file is still the file that was hashed
-"SELECT hash FROM files WHERE path = ?1 AND size = ?2 AND mtime_ns = ?3"
+-- Good - the entry is only valid if the file is still the file that was hashed
+SELECT hash FROM files WHERE path = $path AND size = $size AND mtime_ticks = $mtime
 ```
 
-Store `mtime` at the highest precision the platform gives (nanoseconds where available) - second granularity misses a file edited twice within the same second, which is common under an editor's save. Size is the cheap discriminator that catches most edits; mtime catches same-size edits.
+Store mtime as `File.GetLastWriteTimeUtc(path).Ticks` - 100 ns resolution. Second granularity misses a file edited twice within the same second, which is common under an editor's save. Size is the cheap discriminator that catches most edits; mtime catches same-size edits.
 
 Two further conditions must invalidate the cache: a **schema or algorithm change** (bump a `hash_algo_version` column and treat mismatches as misses, so switching hash functions does not compare new hashes against old ones), and **path case or normalization differences** on Windows and macOS, where the same file can arrive under two spellings (`desktop-filesystem-patterns`).
 
@@ -169,7 +191,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 ### [Severity] {file:line | symbol, when source was supplied without paths | symptom, when no source was supplied}
 
 - Category: {StoreChoice | Migration | FixtureCoverage | Paths | AtomicWrite | CacheInvalidation | Corruption | SettingsCompat}
-- Evidence: {measured (name the version or fixture reproduced against) | estimated (source read, no fixture run; state the schema history assumed) | inferred (no source read; state what was not seen)}
+- Evidence: {measured (name the version or fixture reproduced against - a deterministic failure readable from the supplied source counts, with the line as the repro) | estimated (source read, no fixture run; state the schema history assumed) | inferred (no source read; state what was not seen)}
 - Code: {one-line citation, or `not supplied` when the finding is inferred}
 - Failure: {the concrete case that breaks - which upgrade path, which platform, which stale read}
 - Fix: {the concrete change}
@@ -178,7 +200,7 @@ Two modes, chosen by whether something is being reviewed or authored.
 
 `Severity: {Critical | High | Medium | Low}` - Critical = user data lost or corrupted (on upgrade, on a crash mid-write, or by a migration), or a store that cannot be opened. High = stale results presented as current, a startup failure on an existing config, or a hardcoded path wrong on a target platform. Medium = a defect on an uncommon upgrade or platform path. Low = hygiene with no observed symptom.
 
-`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block. Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`.
+`Category` takes exactly one value; where a defect fits two, pick the one `Fix` addresses and name the other in `Failure`. AOT-unsafe reflection serialization files as `SettingsCompat`. `estimated` and `inferred` bound the header at High, with `Failure` naming the uncapped band; neither ever raises a block. Severity that does not fit a listed band: assign the nearest lower band and state why in `Failure`.
 
 A defect owned by a sibling named in the ownership blockquote is written after the findings as `Deferred: {defect} -> {owning skill}`, one per line. Omit when there are none.
 
@@ -192,19 +214,18 @@ In review mode, close with exactly one status line, after any `Deferred:` lines:
 
 ## Avoid
 
-- Introducing `sled`, or adopting `redb` without owning its format-migration cost
-- `rusqlite` without the `bundled` feature in a shipped desktop app
+- EF Core for a two-table scan cache, or a second store beside SQLite without naming its migration and corruption story
 - A schema version in a file beside the database instead of `user_version`
-- A migration that runs outside a transaction
+- A migration step outside a transaction, or a version bump outside the step's transaction
 - Opening a database whose `user_version` is newer than the binary understands
 - Testing migrations only against a freshly-created schema
-- Regenerating an old-version fixture from current code
+- Regenerating an old-version fixture from current code, or deleting one
 - Writing a downgrade path for a desktop utility
-- Hardcoding `~/.myapp`, `%APPDATA%\myapp`, or a path beside the executable
-- `ProjectDirs::from(..).unwrap()`
-- Putting settings in `cache_dir`, or a rebuildable cache in `config_dir`
-- `fs::write` for settings
-- A settings struct without `#[serde(default)]` on its fields
+- Hardcoding `%APPDATA%`, `~/.myapp`, or a path beside the executable
+- Putting settings or the undo journal in the cache directory, or a rebuildable cache in config
+- `File.WriteAllText` for settings
+- Reflection-based `JsonSerializer` calls in a NativeAOT build
+- A settings property without a default, or a re-save that strips unknown keys
 - Silently overwriting a settings file that failed to parse
 - Keying a scan cache on path alone, or on second-granularity mtime
 - Serving cached hashes across a hash-algorithm change

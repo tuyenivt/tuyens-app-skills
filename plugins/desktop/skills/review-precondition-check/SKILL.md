@@ -76,7 +76,7 @@ A clean tree whose only commit is the initial one is not a stop: `last-commit` m
 Split resolved paths into three lists:
 
 - `reviewable` - text files the workflow will diff.
-- `binary` - detected via `git diff HEAD --numstat` (`--cached` for staged-only mode) reporting `-` for both counts, or by extension for untracked files (images, audio, archives, fonts, compiled artifacts). A bare `git diff --numstat` misses staged files.
+- `binary` - detected via `git diff HEAD --numstat` (`--cached` for staged-only mode; `git diff --numstat <base> HEAD` for last-commit mode) reporting `-` for both counts, or by extension for untracked files (images, audio, archives, fonts, compiled artifacts). A bare `git diff --numstat` misses staged files.
 - `generated` - paths matching the project's generated-output conventions (`*.g.dart`, `*.freezed.dart`, `*.designer.cs`, lockfiles, `build/`, `Library/`).
 
 Binary and generated paths are reported as counts in the handle and excluded from `reviewable`. Never diff them.
